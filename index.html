@@ -3,7 +3,18 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.15)</title>
+<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.17)</title>
+<!-- v2.3.17：僅補上專案文件，無程式碼功能變更。新增
+     docs/AI協作除錯指南.md，記錄 v2.3.16 Google 登入疑難排解的完整經過與根本原因，
+     並整理成一套「非IT/非工程背景使用者如何委任 AI 直接處理問題」的溝通指南與
+     可複製開場白範本，供未來遇到類似狀況時參考使用。 -->
+<!-- v2.3.16 修復：Google 帳號登入按鈕點擊沒反應。
+     根本原因：Netlify Identity widget 彈出的登入小視窗有官方已知的 z-index 疊層臭蟲
+     （github.com/netlify/netlify-identity-widget/issues/94、#67）——本頁 #auth-gate
+     這層全螢幕遮罩 z-index:99999 比登入小視窗還高，導致小視窗雖然有正常開啟，
+     卻被整個蓋住、完全看不到。修法：強制 widget 容器與其 iframe 的 z-index 為
+     CSS 最大值 2147483647，並在按鈕下方加一個「改用直接跳轉登入」備用連結
+     （直接導向 /.netlify/identity/authorize?provider=google，繞過彈出視窗機制）。 -->
 <!-- v2.3.15（本次交付，Netlify+GitHub 全端版本）：
      管理後台新增「刪除檔案」功能——管理者可在下載紀錄旁點擊「🗑 刪除」，
      移除 Netlify Blobs 裡實際儲存的檔案內容（真的刪除，不是隱藏）。
@@ -88,6 +99,14 @@ window.addEventListener('DOMContentLoaded', function(){
 </script>
 
 <style>
+/* ============ 關鍵修正：Netlify Identity 登入視窗 z-index ============
+   Netlify Identity widget 彈出的登入小視窗有一個官方已知的臭蟲：
+   github.com/netlify/netlify-identity-widget/issues/94（"Iframe do not appear on top"）
+   與 #67（"Add high z-index to iframe inline styles"）——當頁面上有其他
+   position:fixed 且 z-index 較高的全螢幕元素時（本頁的 #auth-gate 是 z-index:99999），
+   widget 的登入視窗會被蓋在下面、完全不可見，但它其實有正常開啟。
+   這裡強制把 widget 的容器與其注入的 iframe 蓋過頁面上所有其他元素。 */
+#netlify-identity-widget, iframe[title*="identity" i]{ z-index: 2147483647 !important; }
 *{box-sizing:border-box;margin:0;padding:0}
 :root{
   /* Slate + Emerald 主色系 */
@@ -12742,7 +12761,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-<script>window.APP_VERSION='v2.3.15';</script>
+<script>window.APP_VERSION='v2.3.17';</script>
 
 <!-- ============ Google 帳號登入關卡（v21.0 新增） ============
      沒有登入前，這層全螢幕遮罩會蓋住整個畫面，擋住所有功能。
@@ -12757,6 +12776,9 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
     使用 Google 帳號登入
   </button>
   <div id="auth-gate-status" style="margin-top:18px;font-size:13px;opacity:.55">尚未登入</div>
+  <div style="margin-top:10px;font-size:12px;opacity:.4">
+    按鈕沒反應？<a href="#" onclick="event.preventDefault();window.location.href='/.netlify/identity/authorize?provider=google';return false;" style="color:#7dd3fc;text-decoration:underline">改用直接跳轉登入</a>
+  </div>
 </div>
 
 <script>
@@ -12825,7 +12847,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
     console.error('[netlifyIdentity]', err);
     showGate('登入發生錯誤，請重新嘗試');
   });
-  netlifyIdentity.init();
+  netlifyIdentity.init({ APIUrl: window.location.origin + '/.netlify/identity' });
 })();
 
 // ============ 管理後台面板（v21.0 新增） ============
@@ -12960,7 +12982,7 @@ async function adminDownloadFile(fileId){
     </div>
     <div>
       <div class="brand-text-title">策引AI</div>
-      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.15</span></div>
+      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.17</span></div>
     </div>
     <div class="top-tagline">
       <span class="tagline-text"><span class="brand-subtitle-white" style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;">AI 行銷工作流：智慧分析、策略擬定、行銷規劃</span></span>
@@ -24772,7 +24794,7 @@ body {
 
     if(brandSub){
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.15'); brandSub.appendChild(vb1); })();
+      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.17'); brandSub.appendChild(vb1); })();
       brandSub.style.setProperty('font-family','"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", Arial, sans-serif','important');
       brandSub.style.setProperty('font-weight','700','important');
       brandSub.style.setProperty('letter-spacing','0.08em','important');
@@ -24821,7 +24843,7 @@ body {
 
     if (brandSub) {
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.15'); brandSub.appendChild(vb2); })();
+      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.17'); brandSub.appendChild(vb2); })();
       brandSub.style.setProperty(
         'font-family',
         '"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", "Orbitron", "Segoe UI", Arial, Helvetica, sans-serif',
@@ -24842,7 +24864,7 @@ body {
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function(){
         if (brandTitle) brandTitle.textContent = '策引AI';
-        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.15'); brandSub.appendChild(vb3); }
+        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.17'); brandSub.appendChild(vb3); }
       }).catch(function(){});
     }
   }
