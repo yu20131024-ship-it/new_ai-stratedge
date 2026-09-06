@@ -45,40 +45,48 @@ exports.handler = async function (event, context) {
     time: new Date().toISOString()
   };
 
-  if (type === 'download') {
-    record.reportName = String(payload.reportName || '未命名檔案').slice(0, 200);
-    record.reportFormat = String(payload.reportFormat || '').slice(0, 50);
-    // 檔案內容（前端會傳 base64 或純文字），存進獨立的 Blobs store，
-    // 事件紀錄本身只存一個 fileId 指標，避免登入紀錄列表因為夾帶大檔案而變得又大又慢。
-    if (payload.fileContent) {
-      const filesStore = getFilesStore();
-      const fileId = record.id;
-      await filesStore.set(fileId, payload.fileContent, {
-        metadata: {
-          filename: record.reportName,
-          contentType: payload.contentType || 'text/html;charset=utf-8',
-          uploadedBy: user.email,
-          uploadedAt: record.time
-        }
-      });
-      record.fileId = fileId;
-    }
-  }
-
-  const logsStore = getLogsStore();
-  // 用「單一 key 存整個陣列」的方式，符合 Netlify Blobs 建議的存取模式
-  // （避免用大量小 key 造成之後 list 效能不佳）；筆數不多（公司內部使用工具），直接整包讀寫即可。
-  let all = [];
   try {
-    const existing = await logsStore.get('all-events', { type: 'json' });
-    if (Array.isArray(existing)) all = existing;
-  } catch (e) {
-    // 第一次使用、還沒有任何資料時會走到這裡，維持空陣列即可。
-  }
-  all.push(record);
-  // 最多保留 5000 筆，避免無限成長；超過時砍掉最舊的。
-  if (all.length > 5000) all = all.slice(all.length - 5000);
-  await logsStore.setJSON('all-events', all);
+    if (type === 'download') {
+      record.reportName = String(payload.reportName || '未命名檔案').slice(0, 200);
+      record.reportFormat = String(payload.reportFormat || '').slice(0, 50);
+      // 檔案內容（前端會傳 base64 或純文字），存進獨立的 Blobs store，
+      // 事件紀錄本身只存一個 fileId 指標，避免登入紀錄列表因為夾帶大檔案而變得又大又慢。
+      if (payload.fileContent) {
+        const filesStore = getFilesStore(event);
+        const fileId = record.id;
+        await filesStore.set(fileId, payload.fileContent, {
+          metadata: {
+            filename: record.reportName,
+            contentType: payload.contentType || 'text/html;charset=utf-8',
+            uploadedBy: user.email,
+            uploadedAt: record.time
+          }
+        });
+        record.fileId = fileId;
+      }
+    }
 
-  return json(200, { ok: true, id: record.id });
+    const logsStore = getLogsStore(event);
+    // 用「單一 key 存整個陣列」的方式，符合 Netlify Blobs 建議的存取模式
+    // （避免用大量小 key 造成之後 list 效能不佳）；筆數不多（公司內部使用工具），直接整包讀寫即可。
+    let all = [];
+    try {
+      const existing = await logsStore.get('all-events', { type: 'json' });
+      if (Array.isArray(existing)) all = existing;
+    } catch (e) {
+      // 第一次使用、還沒有任何資料時會走到這裡，維持空陣列即可。
+    }
+    all.push(record);
+    // 最多保留 5000 筆，避免無限成長；超過時砍掉最舊的。
+    if (all.length > 5000) all = all.slice(all.length - 5000);
+    await logsStore.setJSON('all-events', all);
+
+    return json(200, { ok: true, id: record.id });
+  } catch (e) {
+    // v2.3.19：這支原本是前端「fire-and-forget」呼叫（見 index.html 的 .catch 只 console.warn），
+    // 所以就算之前 Blobs 環境設定有問題、這裡一樣在丟 502，使用者完全不會看到——
+    // 只是登入/下載紀錄悄悄地沒被記下來。加上 try/catch 回傳明確錯誤，方便從 Netlify
+    // functions log 看到，而不是無聲失敗。
+    return json(500, { error: 'internal_error', message: e && e.message });
+  }
 };

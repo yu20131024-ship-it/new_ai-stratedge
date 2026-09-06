@@ -22,21 +22,25 @@ exports.handler = async function (event, context) {
     return json(400, { error: 'missing_id' });
   }
 
-  const filesStore = getFilesStore();
-  const fileContent = await filesStore.get(fileId, { type: 'text' });
-  if (fileContent == null) {
-    return json(404, { error: 'not_found', message: '找不到這筆檔案，可能已被清除或 ID 錯誤' });
-  }
-  const meta = await filesStore.getMetadata(fileId);
-  const filename = (meta && meta.metadata && meta.metadata.filename) || (fileId + '.html');
-  const contentType = (meta && meta.metadata && meta.metadata.contentType) || 'text/html;charset=utf-8';
+  try {
+    const filesStore = getFilesStore(event);
+    const fileContent = await filesStore.get(fileId, { type: 'text' });
+    if (fileContent == null) {
+      return json(404, { error: 'not_found', message: '找不到這筆檔案，可能已被清除或 ID 錯誤' });
+    }
+    const meta = await filesStore.getMetadata(fileId);
+    const filename = (meta && meta.metadata && meta.metadata.filename) || (fileId + '.html');
+    const contentType = (meta && meta.metadata && meta.metadata.contentType) || 'text/html;charset=utf-8';
 
-  return {
-    statusCode: 200,
-    headers: {
-      'Content-Type': contentType,
-      'Content-Disposition': 'attachment; filename="' + encodeURIComponent(filename) + '"'
-    },
-    body: fileContent
-  };
+    return {
+      statusCode: 200,
+      headers: {
+        'Content-Type': contentType,
+        'Content-Disposition': 'attachment; filename="' + encodeURIComponent(filename) + '"'
+      },
+      body: fileContent
+    };
+  } catch (e) {
+    return json(500, { error: 'internal_error', message: e && e.message });
+  }
 };

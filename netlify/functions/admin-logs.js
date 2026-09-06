@@ -19,17 +19,23 @@ exports.handler = async function (event, context) {
     return json(403, { error: 'forbidden', message: '此帳號沒有管理後台的查看權限' });
   }
 
-  const logsStore = getLogsStore();
-  let all = [];
   try {
-    const existing = await logsStore.get('all-events', { type: 'json' });
-    if (Array.isArray(existing)) all = existing;
+    const logsStore = getLogsStore(event);
+    let all = [];
+    try {
+      const existing = await logsStore.get('all-events', { type: 'json' });
+      if (Array.isArray(existing)) all = existing;
+    } catch (e) {
+      // 尚無任何資料
+    }
+
+    // 依時間新到舊排序，管理者最想先看到最近發生的事
+    all.sort((a, b) => new Date(b.time) - new Date(a.time));
+
+    return json(200, { ok: true, count: all.length, events: all });
   } catch (e) {
-    // 尚無任何資料
+    // v2.3.19：任何未預期例外（例如 Blobs 環境設定問題）都回傳明確的 JSON 錯誤，
+    // 而不是讓 Netlify 直接吐出裸的 502，方便日後排查。
+    return json(500, { error: 'internal_error', message: e && e.message });
   }
-
-  // 依時間新到舊排序，管理者最想先看到最近發生的事
-  all.sort((a, b) => new Date(b.time) - new Date(a.time));
-
-  return json(200, { ok: true, count: all.length, events: all });
 };

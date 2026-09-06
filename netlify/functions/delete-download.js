@@ -34,33 +34,37 @@ exports.handler = async function (event, context) {
     return json(400, { error: 'missing_id' });
   }
 
-  const logsStore = getLogsStore();
-  let all = [];
   try {
-    const existing = await logsStore.get('all-events', { type: 'json' });
-    if (Array.isArray(existing)) all = existing;
+    const logsStore = getLogsStore(event);
+    let all = [];
+    try {
+      const existing = await logsStore.get('all-events', { type: 'json' });
+      if (Array.isArray(existing)) all = existing;
+    } catch (e) {
+      // 尚無資料
+    }
+
+    const record = all.find(ev => ev.id === id);
+    if (!record) {
+      return json(404, { error: 'not_found', message: '找不到這筆紀錄' });
+    }
+    if (!record.fileId) {
+      return json(400, { error: 'no_file', message: '這筆紀錄本來就沒有檔案可刪除' });
+    }
+
+    const filesStore = getFilesStore(event);
+    await filesStore.delete(record.fileId);
+
+    // 保留事件紀錄本身，只清空 fileId 並補上刪除軌跡
+    record.fileDeleted = true;
+    record.fileDeletedAt = new Date().toISOString();
+    record.fileDeletedBy = user.email;
+    delete record.fileId;
+
+    await logsStore.setJSON('all-events', all);
+
+    return json(200, { ok: true, id });
   } catch (e) {
-    // 尚無資料
+    return json(500, { error: 'internal_error', message: e && e.message });
   }
-
-  const record = all.find(ev => ev.id === id);
-  if (!record) {
-    return json(404, { error: 'not_found', message: '找不到這筆紀錄' });
-  }
-  if (!record.fileId) {
-    return json(400, { error: 'no_file', message: '這筆紀錄本來就沒有檔案可刪除' });
-  }
-
-  const filesStore = getFilesStore();
-  await filesStore.delete(record.fileId);
-
-  // 保留事件紀錄本身，只清空 fileId 並補上刪除軌跡
-  record.fileDeleted = true;
-  record.fileDeletedAt = new Date().toISOString();
-  record.fileDeletedBy = user.email;
-  delete record.fileId;
-
-  await logsStore.setJSON('all-events', all);
-
-  return json(200, { ok: true, id });
 };

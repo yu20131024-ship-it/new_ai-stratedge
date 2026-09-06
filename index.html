@@ -3,7 +3,41 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.17)</title>
+<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.19)</title>
+<!-- v2.3.19（本次交付）：
+     ① 修復管理後台「查詢失敗（狀態碼 502）」：admin-logs / log-event / get-download /
+     delete-download 四支 Netlify Functions 都是用舊式（Lambda 相容模式）的
+     `exports.handler = async function(event, context)` 寫法（因為要讀取
+     Netlify Identity 附加在 context.clientContext.user 的登入資訊）。但 Netlify Blobs
+     的 getStore() 在這種相容模式下「不會」自動讀到執行環境設定，必須在呼叫 getStore()
+     之前先手動呼叫一次 connectLambda(event)，否則 getStore() 內部會丟出
+     MissingBlobsEnvironmentError，這個例外沒有被任何 try/catch 接住，於是 Netlify
+     直接回傳 502（不是我們自己回的錯誤訊息，是平台判定 function 執行到一半就掛掉了）。
+     修法：netlify/functions/_utils.js 的 getLogsStore()/getFilesStore() 改為
+     getLogsStore(event)/getFilesStore(event)，內部先呼叫 connectLambda(event) 再
+     getStore()；四支 function 呼叫端同步更新，並且各自最外層加上 try/catch，
+     萬一未來還有其他未預期例外，也會回傳有意義的 JSON 錯誤而不是裸 502。
+     ② 修復右上角標語文字「AI 行銷工作流：智慧分析、策略擬定、行銷規劃」和
+     「API 設定／🔒 管理後台／登出」按鈕重疊、字疊字看不清楚：原因有兩個——
+     (a) 標語文字用 position:absolute 寫死置中在「整個 header 正中央」，完全沒考慮
+     右側按鈕群的實際寬度，管理者登入後多一顆「🔒 管理後台」按鈕、按鈕群變寬，
+     或視窗變窄時就會撞在一起；(b) 幾個很早期的實驗性主題（inlined-enterprise-saas-polish、
+     inlined-non-generic-product-polish）留下未清乾淨的 `.api-status-pill::after{content:"Backend-ready"}`
+     / `content:"Proxy-ready"` 除錯用文字，疊加顯示在每顆按鈕文字後面。
+     修法：移除那兩段殘留的 ::after 除錯文字；標語文字改成由 JS 即時量測「品牌區塊右緣」
+     與「按鈕群左緣」之間實際可用寬度來定位與限制寬度（含 resize 事件與管理後台按鈕
+     顯示狀態變化的 MutationObserver），空間不夠時才整段隱藏，取代原本寫死的
+     50% 置中與 900px 斷點，避免任何視窗寬度或按鈕數量組合下再度重疊。 -->
+<!-- v2.3.18 修復：以 felix670131@gmail.com 登入後，右上角「🔒 管理後台」按鈕沒有出現。
+     根本原因：netlifyIdentity 的 'init' 事件如果偵測到瀏覽器已有先前登入紀錄，會幾乎
+     立刻（不等網路回應）同步觸發——快到判斷程式執行的當下，瀏覽器都還沒讀取、建立到
+     後面 HTML 裡的 #admin-panel-btn 按鈕元素，導致抓取按鈕元素抓到 null，按鈕永遠不會
+     顯示（即使內部其實已正確判斷為管理者）。修法：在整個頁面 DOM 完全載入完成後，
+     用目前已知的登入者狀態再檢查一次、重新套用按鈕顯示狀態；同時信箱比對加上 .trim()
+     防止前後空白字元造成誤判（前端 index.html 與後端 netlify/functions/_utils.js 皆已同步修正）。
+     這不是 Netlify 環境變數或後端設定的問題——管理員身分認證的伺服器端驗證
+     （netlify/functions/_utils.js 的 isAdmin()）原本就不需要額外設定任何環境變數 Key，
+     只認登入者的 Google 帳號 email 是否等於程式裡寫死的 felix670131@gmail.com。 -->
 <!-- v2.3.17：僅補上專案文件，無程式碼功能變更。新增
      docs/AI協作除錯指南.md，記錄 v2.3.16 Google 登入疑難排解的完整經過與根本原因，
      並整理成一套「非IT/非工程背景使用者如何委任 AI 直接處理問題」的溝通指南與
@@ -6283,13 +6317,11 @@ a {
 }
 
 .api-status-pill::after {
-  content: "Backend-ready";
-  margin-left: .35rem;
-  padding-left: .55rem;
-  border-left: 1px solid rgba(255, 255, 255, .14);
-  color: rgba(237, 237, 240, .62);
-  font-size: .78rem;
-  font-weight: 700;
+  /* v2.3.19 修復：這裡原本殘留一段實驗性主題留下的除錯文字（"Backend-ready"），
+     會顯示在「API 設定」「管理後台」「登出」等按鈕文字後面，並和上方置中的
+     標語文字重疊、造成畫面文字互相疊在一起難以閱讀。這段文字並非真正的功能
+     狀態顯示，直接移除（content:none 讓這個偽元素完全不產生內容/版面）。 */
+  content: none;
 }
 
 .stepper {
@@ -6575,8 +6607,10 @@ body::after {
 }
 
 .api-status-pill::after {
-  content: "Proxy-ready";
-  color: #7e8899;
+  /* v2.3.19 修復：同上，這裡是後面另一個實驗主題又疊加了一次除錯文字
+     （"Proxy-ready"，且因為在檔案中位置更後面，實際蓋過前面那個 "Backend-ready"，
+     是畫面上真正看得到、和標語文字重疊的那組英文字）。一併移除。 */
+  content: none;
 }
 
 .api-status-pill .dot,
@@ -12761,7 +12795,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-<script>window.APP_VERSION='v2.3.17';</script>
+<script>window.APP_VERSION='v2.3.19';</script>
 
 <!-- ============ Google 帳號登入關卡（v21.0 新增） ============
      沒有登入前，這層全螢幕遮罩會蓋住整個畫面，擋住所有功能。
@@ -12813,7 +12847,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
   };
 
   function updateAdminUI(user){
-    var admin = !!(user && user.email && user.email.toLowerCase()==='felix670131@gmail.com');
+    var admin = !!(user && user.email && user.email.trim().toLowerCase()==='felix670131@gmail.com');
     window.__isAdminUser = admin;
     var btn = document.getElementById('admin-panel-btn');
     if(btn) btn.style.display = admin ? 'inline-flex' : 'none';
@@ -12848,6 +12882,21 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
     showGate('登入發生錯誤，請重新嘗試');
   });
   netlifyIdentity.init({ APIUrl: window.location.origin + '/.netlify/identity' });
+
+  /* v2.3.18 修復：管理後台按鈕有時登入後不會顯示。
+     原因：netlifyIdentity 的 'init' 事件如果偵測到瀏覽器已有先前登入紀錄，
+     會幾乎「立刻」觸發（不用等網路回應）——快到這個 <script> 執行的當下，
+     瀏覽器都還沒讀取、建立到後面 HTML 裡的 #admin-panel-btn 這個按鈕元素，
+     導致 document.getElementById('admin-panel-btn') 抓到 null，按鈕永遠不會被
+     顯示出來（即使 window.__isAdminUser 內部其實已經正確判斷為 true）。
+     這裡在整個頁面 DOM 完全載入完成後，用目前已知的登入者狀態再檢查一次、
+     重新套用按鈕顯示狀態，確保不會因為前面那個時間差而漏顯示。 */
+  document.addEventListener('DOMContentLoaded', function(){
+    updateAdminUI(window.__currentIdentityUser);
+  });
+  if(document.readyState === 'complete' || document.readyState === 'interactive'){
+    updateAdminUI(window.__currentIdentityUser);
+  }
 })();
 
 // ============ 管理後台面板（v21.0 新增） ============
@@ -12982,7 +13031,7 @@ async function adminDownloadFile(fileId){
     </div>
     <div>
       <div class="brand-text-title">策引AI</div>
-      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.17</span></div>
+      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.19</span></div>
     </div>
     <div class="top-tagline">
       <span class="tagline-text"><span class="brand-subtitle-white" style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;">AI 行銷工作流：智慧分析、策略擬定、行銷規劃</span></span>
@@ -24794,7 +24843,7 @@ body {
 
     if(brandSub){
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.17'); brandSub.appendChild(vb1); })();
+      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.19'); brandSub.appendChild(vb1); })();
       brandSub.style.setProperty('font-family','"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", Arial, sans-serif','important');
       brandSub.style.setProperty('font-weight','700','important');
       brandSub.style.setProperty('letter-spacing','0.08em','important');
@@ -24843,7 +24892,7 @@ body {
 
     if (brandSub) {
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.17'); brandSub.appendChild(vb2); })();
+      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.19'); brandSub.appendChild(vb2); })();
       brandSub.style.setProperty(
         'font-family',
         '"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", "Orbitron", "Segoe UI", Arial, Helvetica, sans-serif',
@@ -24864,7 +24913,7 @@ body {
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function(){
         if (brandTitle) brandTitle.textContent = '策引AI';
-        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.17'); brandSub.appendChild(vb3); }
+        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.19'); brandSub.appendChild(vb3); }
       }).catch(function(){});
     }
   }
@@ -25624,72 +25673,122 @@ html body .card-title .num{
 
 
 <style id="v231-center-workflow-tagline">
-/* V231：將「AI 行銷工作流：智慧分析、策略擬定、行銷規劃」在網頁畫面置中 */
+/* V231（v2.3.19 修復）：原本把「AI 行銷工作流：智慧分析、策略擬定、行銷規劃」
+   固定寫死在「整個 header 的正中央」，完全沒考慮右側按鈕群的實際寬度——
+   一旦管理者登入多顯示一顆「🔒 管理後台」按鈕，或視窗變窄，按鈕群變寬/
+   往左延伸，就會和這行標語文字重疊在一起（畫面上看起來像文字疊字亂碼）。
+   904px 那條「乾脆隱藏」的媒體查詢也只能治標，中間寬度一樣會重疊。
+   這裡改成：位置與寬度都由下方 JS 依「品牌區塊右緣」與「按鈕群左緣」之間
+   實際剩餘的空間即時計算，永遠不會與任兩側元素重疊，也不受按鈕數量或
+   視窗寬度影響（即時 RWD），空間不夠時才整段隱藏。 */
 html body .top-header-inner{
   position:relative !important;
 }
 
-/* 文字置於整個 header 畫面中央，不受右側 API 設定按鈕影響 */
 html body .top-header-inner .top-tagline > .tagline-text{
   position:absolute !important;
-  left:50% !important;
   top:50% !important;
-  transform:translate(-50%, -50%) !important;
   text-align:center !important;
   white-space:nowrap !important;
-  width:auto !important;
+  overflow:hidden !important;
+  text-overflow:ellipsis !important;
   margin:0 !important;
   pointer-events:none !important;
+  /* left / max-width / transform 由下方 JS 依實際可用空間動態設定 */
 }
 
-/* 保持 API 設定按鈕在右側 */
+/* 保持按鈕群在右側 */
 html body .top-header-inner .top-tagline{
   margin-left:auto !important;
-  text-align:right !important;
   justify-content:flex-end !important;
-}
-
-/* 小螢幕避免和右側按鈕重疊 */
-@media (max-width:900px){
-  html body .top-header-inner .top-tagline > .tagline-text{
-    display:none !important;
-  }
 }
 </style>
 
 <script id="v231-center-workflow-tagline-js">
 (function(){
-  function centerWorkflowTaglineV231(){
-    var targetText = 'AI 行銷工作流：智慧分析、策略擬定、行銷規劃';
-    var spans = Array.from(document.querySelectorAll('.top-header-inner .top-tagline .tagline-text'));
+  var TARGET_TEXT = 'AI 行銷工作流：智慧分析、策略擬定、行銷規劃';
+  var MIN_GAP_TO_SHOW = 140; // 可用寬度小於這個值就直接隱藏，不硬擠造成重疊
+  var SIDE_BUFFER = 24;      // 與品牌區塊 / 按鈕群之間至少保留的間距
 
-    spans.forEach(function(el){
-      if((el.textContent || '').trim().indexOf(targetText) !== -1){
-        el.style.setProperty('position','absolute','important');
-        el.style.setProperty('left','50%','important');
-        el.style.setProperty('top','50%','important');
-        el.style.setProperty('transform','translate(-50%, -50%)','important');
-        el.style.setProperty('text-align','center','important');
-        el.style.setProperty('white-space','nowrap','important');
-        el.style.setProperty('margin','0','important');
-        el.style.setProperty('pointer-events','none','important');
-      }
+  function getTaglineEl(){
+    var spans = document.querySelectorAll('.top-header-inner .top-tagline .tagline-text');
+    for (var i = 0; i < spans.length; i++){
+      if ((spans[i].textContent || '').trim().indexOf(TARGET_TEXT) !== -1) return spans[i];
+    }
+    return null;
+  }
+
+  function layoutWorkflowTaglineV231(){
+    var header = document.querySelector('.top-header-inner');
+    var tagline = getTaglineEl();
+    if (!header || !tagline) return;
+
+    // 品牌區塊（logo + 標題／版號）＝ header 底下除了 .top-tagline 以外的子元素
+    var brandChildren = Array.prototype.slice.call(header.children).filter(function(el){
+      return !el.classList.contains('top-tagline');
     });
+    var headerRect = header.getBoundingClientRect();
+    var brandRight = brandChildren.length
+      ? Math.max.apply(null, brandChildren.map(function(el){ return el.getBoundingClientRect().right; }))
+      : headerRect.left;
+
+    // 右側按鈕群：只算目前實際顯示中的（例如非管理者時「管理後台」是 display:none，不能算進去）
+    var buttons = header.querySelectorAll('.top-tagline .api-status-pill');
+    var visibleButtons = Array.prototype.filter.call(buttons, function(b){
+      return b.offsetParent !== null;
+    });
+    var buttonsLeft = visibleButtons.length
+      ? Math.min.apply(null, visibleButtons.map(function(b){ return b.getBoundingClientRect().left; }))
+      : headerRect.right;
+
+    var gapLeft = brandRight + SIDE_BUFFER;
+    var gapRight = buttonsLeft - SIDE_BUFFER;
+    var availableWidth = gapRight - gapLeft;
+
+    if (!isFinite(availableWidth) || availableWidth < MIN_GAP_TO_SHOW){
+      tagline.style.setProperty('display', 'none', 'important');
+      return;
+    }
+
+    var centerX = gapLeft + availableWidth / 2;
+    var leftPercent = ((centerX - headerRect.left) / headerRect.width) * 100;
+
+    tagline.style.setProperty('display', 'block', 'important');
+    tagline.style.setProperty('max-width', availableWidth + 'px', 'important');
+    tagline.style.setProperty('left', leftPercent + '%', 'important');
+    tagline.style.setProperty('transform', 'translate(-50%, -50%)', 'important');
   }
 
   function runV231(){
-    centerWorkflowTaglineV231();
-    setTimeout(centerWorkflowTaglineV231,100);
-    setTimeout(centerWorkflowTaglineV231,400);
-    setTimeout(centerWorkflowTaglineV231,900);
+    layoutWorkflowTaglineV231();
+    setTimeout(layoutWorkflowTaglineV231, 100);
+    setTimeout(layoutWorkflowTaglineV231, 400);
+    setTimeout(layoutWorkflowTaglineV231, 900);
   }
 
-  if(document.readyState === 'loading'){
+  if (document.readyState === 'loading'){
     document.addEventListener('DOMContentLoaded', runV231);
-  }else{
+  } else {
     runV231();
   }
   window.addEventListener('load', runV231);
+
+  window.addEventListener('resize', function(){
+    if (window.__v231RszRAF) cancelAnimationFrame(window.__v231RszRAF);
+    window.__v231RszRAF = requestAnimationFrame(layoutWorkflowTaglineV231);
+  });
+
+  // 管理後台按鈕登入後才會被切成 display:block，寬度因此改變；
+  // 用 MutationObserver 即時重算，不用再猜測固定的時間點或斷點寬度。
+  if (window.MutationObserver){
+    document.addEventListener('DOMContentLoaded', function(){
+      var btn = document.getElementById('admin-panel-btn');
+      if (btn){
+        new MutationObserver(layoutWorkflowTaglineV231)
+          .observe(btn, { attributes: true, attributeFilter: ['style', 'class'] });
+      }
+    });
+  }
 })();
 </script>
 <style id="v234-hide-api-optional-text">
