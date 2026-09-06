@@ -1,0 +1,9 @@
+{
+  "name": "strat-edge-marketing-tool",
+  "version": "1.0.0",
+  "private": true,
+  "description": "策引 AI 行銷決策系統 — 含 Google 登入與管理者後台",
+  "dependencies": {
+    "@netlify/blobs": "^8.1.0"
+  }
+}
