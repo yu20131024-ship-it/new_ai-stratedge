@@ -1,8 +1,9 @@
 # 策引 AI — 部署與設定說明（Google 登入 + 管理後台）
 
-**目前版本：v2.3.19**
+**目前版本：v2.3.20**
 
 ## 版本紀錄
+- **v2.3.20**：修復管理後台「查詢失敗（狀態碼 401）」。根本原因：前端四個呼叫後端 function 的地方（記錄登入/下載事件、載入管理後台紀錄、刪除檔案、重新下載檔案）都是直接讀取登入時拿到的 `user.token.access_token` 當作 Authorization Bearer token，但 Netlify Identity 核發的 access token 效期只有約 1 小時，分頁開著久一點、或距離上次登入有一段時間，token 就已經過期；後端驗證過期 token 會判定為未登入（`context.clientContext.user` 是 undefined），對應到 `admin-logs.js` 就是回傳 401（`not_authenticated`）。修法：四個呼叫點都改成先 `await user.jwt()` 再發送請求——這是 netlify-identity-widget 官方建議的正確用法，會自動判斷目前 token 是否已過期，過期的話用登入時一併取得、效期長很多的 refresh token 在背景換一顆新的有效 token，沒過期則直接沿用，不會每次都多打一次網路。
 - **v2.3.19**：① 修復管理後台「查詢失敗（狀態碼 502）」——`admin-logs`/`log-event`/`get-download`/`delete-download` 四支 function 用的是舊式（Lambda 相容模式）handler 寫法以讀取 Netlify Identity 資訊，但 Netlify Blobs 的 `getStore()` 在這種模式下不會自動讀到執行環境設定，必須先呼叫 `connectLambda(event)`，否則會丟出未被接住的 `MissingBlobsEnvironmentError`、被 Netlify 直接判定為 502。已在 `_utils.js` 集中修正並加上 try/catch。② 修復右上角標語文字和「API 設定／🔒 管理後台／登出」按鈕重疊、字疊字看不清楚——原因是標語文字用固定 50% 置中、未考慮按鈕群實際寬度，加上兩段舊實驗主題殘留的 `::after` 除錯文字（"Backend-ready" / "Proxy-ready"）疊加顯示。已移除殘留文字，並將標語定位改為由 JS 即時量測可用空間動態計算，避免任何視窗寬度或按鈕數量下再度重疊。
 - **v2.3.18**：修復以 felix670131@gmail.com 登入後，右上角「🔒 管理後台」按鈕沒有出現的問題。根本原因是 netlifyIdentity 的 'init' 事件在偵測到瀏覽器已有先前登入紀錄時，會幾乎立刻同步觸發，快到判斷程式執行當下，瀏覽器還沒讀取到後面 HTML 裡的管理後台按鈕元素，導致抓取失敗、按鈕永遠不顯示。已修正為在整個頁面載入完成後再檢查一次登入狀態；同時信箱比對加上 `.trim()` 防止空白字元誤判（前端與後端皆已同步修正）。**這與 Netlify 環境變數無關**——管理員身分驗證原本就不需要額外設定任何環境變數 Key，只認登入者的 Google 帳號是否等於程式內寫死的管理者信箱。
 - **v2.3.17**：僅補上專案文件，無程式碼功能變更。新增 `docs/AI協作除錯指南.md`，記錄 v2.3.16 Google 登入疑難排解的完整經過與根本原因，並整理成「非IT/非工程背景使用者如何委任 AI 直接處理問題」的溝通指南與可複製開場白範本。

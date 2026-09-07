@@ -3,8 +3,26 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.19)</title>
-<!-- v2.3.19（本次交付）：
+<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.20)</title>
+<!-- v2.3.20（本次交付）：
+     修復管理後台「查詢失敗（狀態碼 401）」：前端 __logEvent / loadAdminLogs /
+     adminDeleteFile / adminDownloadFile 這四個呼叫後端 function 的地方，原本都是直接讀
+     window.__currentIdentityUser.token.access_token 當作 Authorization Bearer token。
+     問題是 Netlify Identity 核發的 access token 效期只有大約 1 小時，只要分頁開著超過
+     這段時間沒重新整理、或是上次登入已經是一段時間以前，這個存在記憶體/localStorage
+     裡的 token 就已經過期。後端 _utils.js 的 getIdentityUser() 是讀
+     context.clientContext.user——這個物件只有在 Netlify 平台驗證 Authorization
+     header 裡的 JWT「有效且未過期」時才會存在；送出過期 token 時它會是 undefined，
+     admin-logs.js 判斷 user 不存在，回傳 401 (not_authenticated)，也就是畫面上看到的
+     「查詢失敗（狀態碼 401），請稍後再試」。
+     修法：四個呼叫點都改成先 `await user.jwt()` 再送出去，而不是直接讀
+     user.token.access_token。netlify-identity-widget 的 jwt() 方法會自動檢查目前
+     token 是否已過期或快過期，是的話用登入時一併拿到、效期長很多的 refresh_token
+     在背景換一顆新的有效 token 再回傳；沒過期就直接回傳原本那顆，不會多打一次網路。
+     「稍後再試」不會真的自己好——必須重新登入讓瀏覽器拿到新 token，這次修復後
+     同一次登入的 session 內就不會再因為 token 過期而卡住，管理者也不用每次過一段
+     時間就要重新登出再登入才能打開管理後台。 -->
+<!-- v2.3.19（前一版）：
      ① 修復管理後台「查詢失敗（狀態碼 502）」：admin-logs / log-event / get-download /
      delete-download 四支 Netlify Functions 都是用舊式（Lambda 相容模式）的
      `exports.handler = async function(event, context)` 寫法（因為要讀取
@@ -12795,7 +12813,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-<script>window.APP_VERSION='v2.3.19';</script>
+<script>window.APP_VERSION='v2.3.20';</script>
 
 <!-- ============ Google 帳號登入關卡（v21.0 新增） ============
      沒有登入前，這層全螢幕遮罩會蓋住整個畫面，擋住所有功能。
@@ -12839,10 +12857,21 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
     var user = window.__currentIdentityUser;
     if(!user || !user.token || !user.token.access_token) return Promise.resolve();
     var body = Object.assign({type:type}, extra||{});
-    return fetch('/.netlify/functions/log-event', {
-      method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+user.token.access_token},
-      body: JSON.stringify(body)
+    // v2.3.20 修復「查詢失敗（狀態碼 401）」：這裡原本直接讀 user.token.access_token，
+    // 但 Netlify Identity 核發的 access token 大約 1 小時就會過期；只要分頁開著超過這段
+    // 時間才觸發下載、或隔了一段時間才打開管理後台，送出去的就是一顆過期的 token。
+    // 後端 Netlify Identity 驗證過期 token 時，不會把使用者資訊放進
+    // context.clientContext.user，所以 _utils.js 的 getIdentityUser() 回傳 null，
+    // 對應到 admin-logs.js 就是「not_authenticated」→ 401。
+    // 正確作法是呼叫 user.jwt()：這個方法內部會檢查 token 是否快過期，是的話用登入時
+    // 拿到的 refresh_token 自動換一顆新的、一定有效的 token 再回傳，而不是直接信任
+    // 可能已經過期的舊 token。
+    return user.jwt().then(function(freshToken){
+      return fetch('/.netlify/functions/log-event', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+freshToken},
+        body: JSON.stringify(body)
+      });
     }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
   };
 
@@ -12916,8 +12945,10 @@ async function loadAdminLogs(){
   const user=window.__currentIdentityUser;
   if(!user || !user.token){ body.innerHTML='<p style="color:#DC2626">尚未登入，無法查詢。</p>'; return; }
   try{
+    // v2.3.20：用 user.jwt() 換一顆保證未過期的 token，見上方 __logEvent 的說明。
+    const freshToken=await user.jwt();
     const resp=await fetch('/.netlify/functions/admin-logs', {
-      headers:{'Authorization':'Bearer '+user.token.access_token}
+      headers:{'Authorization':'Bearer '+freshToken}
     });
     if(resp.status===403){ body.innerHTML='<p style="color:#DC2626">此帳號沒有管理後台的查看權限。</p>'; return; }
     if(!resp.ok){ body.innerHTML='<p style="color:#DC2626">查詢失敗（狀態碼 '+resp.status+'），請稍後再試。</p>'; return; }
@@ -12984,9 +13015,11 @@ async function adminDeleteFile(eventId){
   const user=window.__currentIdentityUser;
   if(!user || !user.token) return;
   try{
+    // v2.3.20：同上，換一顆保證未過期的 token。
+    const freshToken=await user.jwt();
     const resp=await fetch('/.netlify/functions/delete-download', {
       method:'POST',
-      headers:{'Content-Type':'application/json','Authorization':'Bearer '+user.token.access_token},
+      headers:{'Content-Type':'application/json','Authorization':'Bearer '+freshToken},
       body: JSON.stringify({id: eventId})
     });
     const data=await resp.json().catch(()=>({}));
@@ -13005,8 +13038,10 @@ async function adminDownloadFile(fileId){
   const user=window.__currentIdentityUser;
   if(!user || !user.token) return;
   try{
+    // v2.3.20：同上，換一顆保證未過期的 token。
+    const freshToken=await user.jwt();
     const resp=await fetch('/.netlify/functions/get-download?id='+encodeURIComponent(fileId), {
-      headers:{'Authorization':'Bearer '+user.token.access_token}
+      headers:{'Authorization':'Bearer '+freshToken}
     });
     if(!resp.ok){ alert('下載失敗（狀態碼 '+resp.status+'）'); return; }
     const blob=await resp.blob();
@@ -13031,7 +13066,7 @@ async function adminDownloadFile(fileId){
     </div>
     <div>
       <div class="brand-text-title">策引AI</div>
-      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.19</span></div>
+      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.20</span></div>
     </div>
     <div class="top-tagline">
       <span class="tagline-text"><span class="brand-subtitle-white" style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;">AI 行銷工作流：智慧分析、策略擬定、行銷規劃</span></span>
@@ -24843,7 +24878,7 @@ body {
 
     if(brandSub){
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.19'); brandSub.appendChild(vb1); })();
+      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.20'); brandSub.appendChild(vb1); })();
       brandSub.style.setProperty('font-family','"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", Arial, sans-serif','important');
       brandSub.style.setProperty('font-weight','700','important');
       brandSub.style.setProperty('letter-spacing','0.08em','important');
@@ -24892,7 +24927,7 @@ body {
 
     if (brandSub) {
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.19'); brandSub.appendChild(vb2); })();
+      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.20'); brandSub.appendChild(vb2); })();
       brandSub.style.setProperty(
         'font-family',
         '"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", "Orbitron", "Segoe UI", Arial, Helvetica, sans-serif',
@@ -24913,7 +24948,7 @@ body {
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function(){
         if (brandTitle) brandTitle.textContent = '策引AI';
-        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.19'); brandSub.appendChild(vb3); }
+        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.20'); brandSub.appendChild(vb3); }
       }).catch(function(){});
     }
   }
