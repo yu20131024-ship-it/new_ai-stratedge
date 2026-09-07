@@ -3,8 +3,30 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.20)</title>
-<!-- v2.3.20（本次交付）：
+<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.24)</title>
+<!-- v2.3.24（本次交付）：
+     需求：不管使用者有沒有登入（含用瀏覽器開發者工具繞過前端 Google 登入關卡的情況），
+     只要點擊下載按鈕產生檔案，管理後台都要留一份備份。
+     修法：
+     ① 後端 netlify/functions/log-event.js —— 'login' 事件維持原本一定要合法登入身份才能
+     記錄；'download' 事件改成不管有沒有登入都放行，只是沒有登入身份時，記錄裡的姓名／
+     email 會標記成「（未登入使用者）」、isAnonymous:true，IP 與瀏覽器資訊照樣完整記錄，
+     檔案內容一樣存進 Blobs（未登入請求另外加了 6MB 檔案內容大小上限，避免這支現在對外
+     開放的 API 被拿來塞爆儲存空間）。
+     ② 前端 __logEvent()（下載紀錄的呼叫函式）——原本沒有登入憑證就直接放棄、什麼都不送；
+     現在下載類型的事件不管有沒有登入都會送出，沒有 token 時改用不帶 Authorization
+     header 的方式呼叫，讓後端走「未登入」那條放行的路徑。已登入時如果換新 token 失敗
+     （例如 refresh token 也已過期），一樣會退回用匿名方式送出，確保這筆下載不會整個遺失。
+     ③ 管理後台面板（renderAdminLogs）——未登入的下載紀錄沒有 email 可以歸戶，不能跟
+     其他登入使用者混在一起分組（會誤導成「同一人做了全部下載」），所以獨立用紅色警示區塊
+     顯示在最上方，附時間／IP／瀏覽器／檔案下載連結；登入使用者的紀錄維持原本照帳號分組
+     的呈現方式。
+     已知限制（純前端記錄機制的天生極限，無法用這次的修法完全根除）：如果使用者不只是
+     關掉登入遮罩，而是連「呼叫記錄用的這行程式碼」本身都手動移除或覆寫掉再執行下載，
+     這種刻意規避追蹤的情況仍然抓不到——要徹底根治，需要把「產生報告」的核心邏輯整個
+     搬到後端、要求先驗證身份才能取得產生報告所需的資料，屬於更大的架構調整，不在本次
+     修改範圍內。 -->
+<!-- v2.3.20（前一版）：
      修復管理後台「查詢失敗（狀態碼 401）」：前端 __logEvent / loadAdminLogs /
      adminDeleteFile / adminDownloadFile 這四個呼叫後端 function 的地方，原本都是直接讀
      window.__currentIdentityUser.token.access_token 當作 Authorization Bearer token。
@@ -12813,7 +12835,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-<script>window.APP_VERSION='v2.3.20';</script>
+<script>window.APP_VERSION='v2.3.24';</script>
 
 <!-- ============ Google 帳號登入關卡（v21.0 新增） ============
      沒有登入前，這層全螢幕遮罩會蓋住整個畫面，擋住所有功能。
@@ -12855,24 +12877,47 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
   // 也絕對不會擋住使用者原本要做的「下載報告」這個主要功能。
   window.__logEvent = function(type, extra){
     var user = window.__currentIdentityUser;
-    if(!user || !user.token || !user.token.access_token) return Promise.resolve();
     var body = Object.assign({type:type}, extra||{});
-    // v2.3.20 修復「查詢失敗（狀態碼 401）」：這裡原本直接讀 user.token.access_token，
-    // 但 Netlify Identity 核發的 access token 大約 1 小時就會過期；只要分頁開著超過這段
-    // 時間才觸發下載、或隔了一段時間才打開管理後台，送出去的就是一顆過期的 token。
-    // 後端 Netlify Identity 驗證過期 token 時，不會把使用者資訊放進
-    // context.clientContext.user，所以 _utils.js 的 getIdentityUser() 回傳 null，
-    // 對應到 admin-logs.js 就是「not_authenticated」→ 401。
-    // 正確作法是呼叫 user.jwt()：這個方法內部會檢查 token 是否快過期，是的話用登入時
-    // 拿到的 refresh_token 自動換一顆新的、一定有效的 token 再回傳，而不是直接信任
-    // 可能已經過期的舊 token。
+    var hasStoredToken = !!(user && user.token && user.token.access_token);
+
+    // v2.3.24：'login' 事件沒有意義在沒登入的狀態下送出（沒有身份可記），維持原本行為不送。
+    if(type === 'login'){
+      if(!hasStoredToken) return Promise.resolve();
+      return user.jwt().then(function(freshToken){
+        return fetch('/.netlify/functions/log-event', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+freshToken},
+          body: JSON.stringify(body)
+        });
+      }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
+    }
+
+    // type === 'download'：不管有沒有登入都要送出去，讓管理後台一定會留一份檔案備份，
+    // 就算有人繞過前端登入關卡（例如用開發者工具關掉登入遮罩、或直接呼叫產生報告的
+    // 函式）下載報告，這支呼叫也不看登入狀態、照樣送——差別只是後端會把這種情況標記
+    // 成「未登入」，管理者知道無法追蹤到實際帳號，但檔案內容本身一樣留得下來。
+    function sendAnonymous(){
+      return fetch('/.netlify/functions/log-event', {
+        method:'POST',
+        headers:{'Content-Type':'application/json'},
+        body: JSON.stringify(body)
+      }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
+    }
+
+    if(!hasStoredToken) return sendAnonymous();
+
     return user.jwt().then(function(freshToken){
       return fetch('/.netlify/functions/log-event', {
         method:'POST',
         headers:{'Content-Type':'application/json','Authorization':'Bearer '+freshToken},
         body: JSON.stringify(body)
       });
-    }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
+    }).catch(function(e){
+      // 換新 token 失敗（例如 refresh token 也已經過期或被撤銷）——這種情況下
+      // 退而求其次，改用匿名方式把這次下載記下來，至少不會整筆遺失。
+      console.warn('[log-event] 換新 token 失敗，改用匿名方式記錄下載', e);
+      return sendAnonymous();
+    });
   };
 
   function updateAdminUI(user){
@@ -12963,10 +13008,41 @@ function renderAdminLogs(events){
   const body=document.getElementById('admin-panel-body');
   if(!events.length){ body.innerHTML='<p style="color:#94A3B8">目前尚無任何登入或下載紀錄。</p>'; return; }
 
+  // v2.3.24：未登入（含繞過前端登入關卡）的下載事件沒有 email 可以歸戶，
+  // 不能跟其他登入使用者的紀錄混在一起、用 email 分組（那樣會誤導成「同一個人
+  // 做了全部這些下載」）。所以拆成兩塊呈現：上面是「未登入下載」的平鋪清單
+  // （用時間排序，附上當下的 IP／瀏覽器可供追查），下面才是原本照登入帳號分組
+  // 的正常清單。
+  const anonDownloads = events.filter(ev => ev.type==='download' && ev.isAnonymous);
+  const normalEvents = events.filter(ev => !(ev.type==='download' && ev.isAnonymous));
+
+  function downloadActionCell21(d){
+    if(d.fileId){
+      return `<a href="#" onclick="adminDownloadFile('${d.fileId}');return false;" style="color:#2563EB;margin-right:10px">下載</a><a href="#" onclick="adminDeleteFile('${d.id}');return false;" style="color:#DC2626">🗑 刪除</a>`;
+    }else if(d.fileDeleted){
+      return `<span style="color:#94A3B8">（無檔案，已由 ${esc21(d.fileDeletedBy||'管理者')} 於 ${esc21(new Date(d.fileDeletedAt).toLocaleString('zh-TW'))} 刪除）</span>`;
+    }
+    return '（無檔案）';
+  }
+
+  let anonHtml = '';
+  if(anonDownloads.length){
+    const sortedAnon = anonDownloads.slice().sort((a,b)=> new Date(b.time)-new Date(a.time));
+    anonHtml = `
+      <div style="border:1px solid #FCA5A5;background:#FEF2F2;border-radius:10px;margin-bottom:14px;padding:14px">
+        <div style="font-weight:600;margin-bottom:2px;font-size:13px;color:#B91C1C">⚠ 未登入下載（${anonDownloads.length} 筆，可能是繞過前端登入頁下載的）</div>
+        <div style="font-size:12px;color:#B91C1C;opacity:.85;margin-bottom:10px">這些下載沒有經過 Google 帳號登入驗證，無法追蹤到實際使用者身份，只留下當下的 IP 與瀏覽器資訊；檔案內容仍完整保留，可下載查閱。</div>
+        <table style="width:100%;border-collapse:collapse;font-size:13px">
+          <tr style="background:#FEE2E2"><th style="text-align:left;padding:5px 8px">時間</th><th style="text-align:left;padding:5px 8px">IP</th><th style="text-align:left;padding:5px 8px">瀏覽器</th><th style="text-align:left;padding:5px 8px">檔案</th><th style="text-align:left;padding:5px 8px">格式</th><th style="text-align:left;padding:5px 8px">操作</th></tr>
+          ${sortedAnon.map(d=>`<tr><td style="padding:5px 8px;border-bottom:1px solid #FECACA">${esc21(new Date(d.time).toLocaleString('zh-TW'))}</td><td style="padding:5px 8px;border-bottom:1px solid #FECACA">${esc21(d.ip)}</td><td style="padding:5px 8px;border-bottom:1px solid #FECACA;word-break:break-all">${esc21(d.userAgent)}</td><td style="padding:5px 8px;border-bottom:1px solid #FECACA">${esc21(d.reportName||'—')}</td><td style="padding:5px 8px;border-bottom:1px solid #FECACA">${esc21(d.reportFormat||'—')}</td><td style="padding:5px 8px;border-bottom:1px solid #FECACA">${downloadActionCell21(d)}</td></tr>`).join('')}
+        </table>
+      </div>`;
+  }
+
   // 依 email 分組，讓管理者一眼看出「這個人」總共登入過幾次、下載過哪些報告，
   // 而不是一長串沒有分類、時間軸式的流水帳。
   const byUser={};
-  events.forEach(ev=>{
+  normalEvents.forEach(ev=>{
     if(!byUser[ev.email]) byUser[ev.email]={name:ev.name, email:ev.email, logins:[], downloads:[]};
     if(ev.name) byUser[ev.email].name = ev.name; // 用最新一筆的姓名顯示
     if(ev.type==='login') byUser[ev.email].logins.push(ev);
@@ -12975,7 +13051,11 @@ function renderAdminLogs(events){
 
   const rows = Object.values(byUser).sort((a,b)=> (b.logins[0]?new Date(b.logins[0].time):0) - (a.logins[0]?new Date(a.logins[0].time):0));
 
-  body.innerHTML = `<p style="color:#64748B;font-size:13px;margin-bottom:14px">共 ${events.length} 筆事件，${rows.length} 位使用者。點擊姓名可展開詳細登入 IP／瀏覽器與下載紀錄。</p>` +
+  const normalSummary = normalEvents.length
+    ? `<p style="color:#64748B;font-size:13px;margin-bottom:14px">共 ${normalEvents.length} 筆已登入事件，${rows.length} 位使用者。點擊姓名可展開詳細登入 IP／瀏覽器與下載紀錄。</p>`
+    : (anonDownloads.length ? '' : '<p style="color:#94A3B8">目前尚無任何登入或下載紀錄。</p>');
+
+  body.innerHTML = anonHtml + normalSummary +
     rows.map((u,i)=>{
       const lastLogin = u.logins[0];
       return `
@@ -12994,15 +13074,7 @@ function renderAdminLogs(events){
           <table style="width:100%;border-collapse:collapse;font-size:13px">
             <tr style="background:#EEF2F7"><th style="text-align:left;padding:5px 8px">時間</th><th style="text-align:left;padding:5px 8px">檔案</th><th style="text-align:left;padding:5px 8px">格式</th><th style="text-align:left;padding:5px 8px">操作</th></tr>
             ${u.downloads.map(d=>{
-              let actionCell;
-              if(d.fileId){
-                actionCell = `<a href="#" onclick="adminDownloadFile('${d.fileId}');return false;" style="color:#2563EB;margin-right:10px">下載</a><a href="#" onclick="adminDeleteFile('${d.id}');return false;" style="color:#DC2626">🗑 刪除</a>`;
-              }else if(d.fileDeleted){
-                actionCell = `<span style="color:#94A3B8">（無檔案，已由 ${esc21(d.fileDeletedBy||'管理者')} 於 ${esc21(new Date(d.fileDeletedAt).toLocaleString('zh-TW'))} 刪除）</span>`;
-              }else{
-                actionCell = '（無檔案）';
-              }
-              return `<tr><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${esc21(new Date(d.time).toLocaleString('zh-TW'))}</td><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${esc21(d.reportName||'—')}</td><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${esc21(d.reportFormat||'—')}</td><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${actionCell}</td></tr>`;
+              return `<tr><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${esc21(new Date(d.time).toLocaleString('zh-TW'))}</td><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${esc21(d.reportName||'—')}</td><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${esc21(d.reportFormat||'—')}</td><td style="padding:5px 8px;border-bottom:1px solid #F1F5F9">${downloadActionCell21(d)}</td></tr>`;
             }).join('') || '<tr><td colspan="4" style="padding:5px 8px;color:#94A3B8">無下載紀錄</td></tr>'}
           </table>
         </div>
@@ -13066,7 +13138,7 @@ async function adminDownloadFile(fileId){
     </div>
     <div>
       <div class="brand-text-title">策引AI</div>
-      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.20</span></div>
+      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.24</span></div>
     </div>
     <div class="top-tagline">
       <span class="tagline-text"><span class="brand-subtitle-white" style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;">AI 行銷工作流：智慧分析、策略擬定、行銷規劃</span></span>
@@ -24878,7 +24950,7 @@ body {
 
     if(brandSub){
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.20'); brandSub.appendChild(vb1); })();
+      (function(){ var vb1=document.createElement('span'); vb1.className='brand-version-badge'; vb1.id='brand-version-badge'; vb1.textContent=(window.APP_VERSION||'v2.3.24'); brandSub.appendChild(vb1); })();
       brandSub.style.setProperty('font-family','"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", Arial, sans-serif','important');
       brandSub.style.setProperty('font-weight','700','important');
       brandSub.style.setProperty('letter-spacing','0.08em','important');
@@ -24927,7 +24999,7 @@ body {
 
     if (brandSub) {
       brandSub.textContent = 'Strat Edge';
-      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.20'); brandSub.appendChild(vb2); })();
+      (function(){ var vb2=document.createElement('span'); vb2.className='brand-version-badge'; vb2.id='brand-version-badge'; vb2.textContent=(window.APP_VERSION||'v2.3.24'); brandSub.appendChild(vb2); })();
       brandSub.style.setProperty(
         'font-family',
         '"Dunbar", "Dunbar Tall", "Dunbar Text", "Dunbar Low", "Good Times", "Orbitron", "Segoe UI", Arial, Helvetica, sans-serif',
@@ -24948,7 +25020,7 @@ body {
     if (document.fonts && document.fonts.ready) {
       document.fonts.ready.then(function(){
         if (brandTitle) brandTitle.textContent = '策引AI';
-        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.20'); brandSub.appendChild(vb3); }
+        if (brandSub) { brandSub.textContent = 'Strat Edge'; var vb3=document.createElement('span'); vb3.className='brand-version-badge'; vb3.id='brand-version-badge'; vb3.textContent=(window.APP_VERSION||'v2.3.24'); brandSub.appendChild(vb3); }
       }).catch(function(){});
     }
   }
