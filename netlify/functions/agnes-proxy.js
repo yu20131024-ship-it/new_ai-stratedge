@@ -92,7 +92,10 @@ exports.handler = async function handler(event) {
   // through so the existing OpenAI-compatible parser keeps working.
   try {
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), 25000);
+    // Agnes 5,000-token segments can legitimately take >25s. Netlify synchronous
+    // Functions currently allow up to 60s, so keep a safety margin and abort upstream
+    // at 55s rather than failing a healthy generation at 25s.
+    const timer = setTimeout(() => controller.abort(), 55000);
     let upstream;
     try {
       upstream = await fetch(baseUrl + '/chat/completions', {
@@ -127,7 +130,7 @@ exports.handler = async function handler(event) {
       error: {
         code: isAbort ? 'upstream_timeout' : 'upstream_network_error',
         message: isAbort
-          ? 'Agnes API did not respond within the proxy timeout.'
+          ? 'Agnes API did not respond within the 55-second proxy timeout.'
           : 'Netlify could not reach the selected Agnes API endpoint.',
         baseUrl
       }

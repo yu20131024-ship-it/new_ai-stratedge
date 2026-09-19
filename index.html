@@ -92,7 +92,7 @@
         canAccessStep()／navigateFlowStep()／getLockedStepMessage() 的邏輯
         本身完全未被更動，只有兩處純視覺呈現被修正。
      [測試] 新增 stage5-locked-nav-ux.test.js（10項）。 -->
-<!-- v2.3.45：修正使用者回報的視覺 bug——歸因模擬頁籤長條圖下方空白過大。
+<!-- v2.3.46：修正使用者回報的視覺 bug——歸因模擬頁籤長條圖下方空白過大。
      根因：歸因模擬用的是純 SVG、依管道數量而定的矮圖表（3-6個管道約100-250px高），
      卻跟主要分析頁的 Chart.js canvas 大圖表共用同一個 chart-box class 名稱；
      樣式表裡有一條規則把所有 chart-box 都強制設成 34rem（約544px）固定高度，
@@ -14459,7 +14459,7 @@ async function adminDownloadFile(fileId){
       <div class="form-group">
         <label class="form-label">Agnes AI Base URL（選填，預設使用官方端點）</label>
         <input id="api-baseurl-agnes" type="text" class="form-ctrl" placeholder="https://apihub.agnes-ai.com/v1">
-        <p class="form-hint">留空則使用官方預設端點 <span style="color:var(--accent)">https://apihub.agnes-ai.com/v1</span>（model: agnes-2.0-flash）。目前 Agnes 請求會先經由本站 Netlify 後端中介，再連到 Agnes，可避免瀏覽器 CORS 阻擋。</p>
+        <p class="form-hint">留空則使用官方預設端點 <span style="color:var(--accent)">https://apihub.agnes-ai.com/v1</span>（model: agnes-2.0-flash）。目前 Agnes 請求會先經由本站 Netlify 後端中介，再連到 Agnes，可避免瀏覽器 CORS 阻擋；大輸出請求的 Proxy 等待上限已提高至 55 秒。</p>
       </div>
     </div>
 
@@ -14903,15 +14903,17 @@ function computeRetryWaitMs(resp, attempt){
 
 // v20.2 修復（原「效能過慢當機」根因之一）：舊版 fetch 完全沒有逾時機制（無 AbortController），
 // 若第三方 API 端網路真的卡住、無回應也無錯誤，畫面會永遠停在 loading，使用者只能重新整理整頁。
-// v20.4 修復：固定 25 秒逾時對「輸出上限較大」的請求並不合理——尤其 Agnes AI 這類第三方服務，
-// max_tokens 越大，模型生成完畢所需的時間也越長，固定 25 秒常常在 AI 其實還在正常生成的途中
-// 就被判定逾時、白白重試兩次後才改用規則模擬（實測曾發生 20000 tokens 請求在 25 秒內必定逾時）。
-// 改為依請求的 max_tokens 動態估算合理逾時：基礎 20 秒 + 每 1000 tokens 額外約 3.2 秒，
-// 下限 25 秒（維持原本對小請求的保護）、上限 70 秒（避免真的卡住時等太久）。
-const AI_ATTEMPT_TIMEOUT_MS=25000; // 保留作為預設值／無法取得 maxTokens 時的備援
+// v2.3.46：修復 Agnes Proxy 25 秒提前中止。
+// 實際截圖顯示 5,000-token 段落在約 31 秒時被判定為 proxy_or_network；
+// 根因是 Netlify proxy 舊版只等 25 秒，遠早於 Netlify 目前同步 Function 的 60 秒上限。
+// Agnes 大輸出需要更長生成時間，因此把一般請求的 client timeout 提高到最多 55 秒，
+// 與 server-side proxy 的 55 秒 timeout 對齊，避免「前端 36 秒先死」或「proxy 25 秒先死」。
+const AI_ATTEMPT_TIMEOUT_MS=25000; // 小請求仍維持 25 秒保護
 function computeAttemptTimeoutMs(maxTokens){
-  const base = 20000 + Math.round((maxTokens||2000)/1000)*3200;
-  return Math.min(70000, Math.max(25000, base));
+  const requested = Math.max(1, Number(maxTokens)||2000);
+  // 20 秒基礎 + 每 1000 tokens 5 秒；上限 55 秒，留 5 秒給 Netlify function 回傳。
+  const base = 20000 + Math.ceil(requested/1000)*5000;
+  return Math.min(55000, Math.max(25000, base));
 }
 async function fetchWithRetry(fetchFn, maxRetries, onRetry, externalSignal, timeoutMs){
   const effectiveTimeoutMs = timeoutMs || AI_ATTEMPT_TIMEOUT_MS;
@@ -15286,7 +15288,7 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   const key=getKeyFor('agnes');
   if(!key) throw new Error('no_key:尚未設定 Agnes AI API Key');
 
-  // v2.3.45：所有新請求與 retry 統一由 doFetch() 內的 AgnesQuotaGuard.acquire() 取得配額。
+  // v2.3.46：所有新請求與 retry 統一由 doFetch() 內的 AgnesQuotaGuard.acquire() 取得配額。
   // 官方正確端點：https://apihub.agnes-ai.com/v1
   let baseUrl='https://apihub.agnes-ai.com/v1';
   try{
@@ -15322,7 +15324,7 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
     const requestedMaxTokens = Math.max(1, Number(maxTokens)||2000);
     const effectiveMaxTokens = Math.min(requestedMaxTokens, remainingTpm);
     await AgnesQuotaGuard.acquire(inputTokens + effectiveMaxTokens, signal);
-    // v2.3.45：改走同源 Netlify Function，再由伺服器呼叫 Agnes。
+    // v2.3.46：改走同源 Netlify Function，再由伺服器呼叫 Agnes。
     // 這樣瀏覽器不再直接跨網域 POST 到 Agnes，可排除 CORS 是主要失敗原因。
     return fetch('/.netlify/functions/agnes-proxy',{
       method:'POST',

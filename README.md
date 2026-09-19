@@ -1,5 +1,10 @@
 
-## v2.3.44 Agnes 連線修復
+### v2.3.46 本次修正
+- 修復 Agnes Proxy 固定 25 秒 upstream timeout；5,000-token 分段實際可能超過 25 秒，會在模型仍正常生成時被誤判為 `proxy_or_network`。
+- Netlify server-side proxy 等待上限調整為 55 秒；前端 Agnes 請求 timeout 同步調整為最多 55 秒。Netlify 官方目前同步 Function 執行上限為 60 秒，因此保留約 5 秒回傳緩衝。
+- 保留 14 RPM / 29 RPD / 9,999 TPM 本地安全守門，不用繞過供應商限制的方式解決 429。
+
+## v2.3.46 Agnes 連線修復（本次重點）
 
 Agnes AI 現在改由 `/.netlify/functions/agnes-proxy` 同源中介呼叫，瀏覽器不再直接 POST 到 `apihub.agnes-ai.com`，因此不再把瀏覽器 CORS 當成正常 API 失敗。Proxy 只允許 Agnes 官方 API 網域：`apihub.agnes-ai.com`、`apihub.agnes-ai.cn`、`api.agnes-ai.cn`，且不記錄 API Key。
 
