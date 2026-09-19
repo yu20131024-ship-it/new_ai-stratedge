@@ -35,6 +35,7 @@ exports.handler = async function (event, context) {
     return {
       statusCode: 200,
       headers: {
+        'Cache-Control': 'no-store',
         'Content-Type': contentType,
         'Content-Disposition': 'attachment; filename="' + encodeURIComponent(filename) + '"'
       },
