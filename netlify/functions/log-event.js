@@ -21,7 +21,7 @@
 // 前端記錄機制都無法防範這種情況，只有把「產生報告」的核心邏輯整個搬到後端才能根治。
 
 const { randomUUID } = require('crypto');
-const { getIdentityUser, getClientIp, getUserAgent, getFilesStore, updateLogsWithRetry, json } = require('./_utils');
+const { getIdentityUser, getClientIp, getUserAgent, getLogsStore, getFilesStore, json } = require('./_utils');
 
 // 匿名（未登入）下載請求的檔案內容大小上限，避免這支現在開放給任何人呼叫的 API
 // 被拿來塞爆 Blobs 儲存空間。已登入的請求不受此限制（沿用原本行為）。
@@ -96,15 +96,20 @@ exports.handler = async function (event, context) {
       }
     }
 
-    // v2.3.26 變更：改用 updateLogsWithRetry 做「條件式寫入＋衝突自動重試」，取代原本
-    // 「整包讀出→push→整包寫回」但完全沒有防護的寫法。舊寫法在兩個請求（例如兩位使用者
-    // 同時下載、或使用者下載與管理者刪檔同時發生）幾乎同時執行時，後寫入的那次會直接用
-    // 「舊資料+自己的修改」整包覆蓋掉，讓對方剛寫入的那筆紀錄悄悄消失且無法察覺；
-    // 詳細原理見 _utils.js 對 updateLogsWithRetry 的說明註解。
-    await updateLogsWithRetry(event, (all) => {
-      all.push(record);
-      return all;
-    });
+    const logsStore = getLogsStore(event);
+    // 用「單一 key 存整個陣列」的方式，符合 Netlify Blobs 建議的存取模式
+    // （避免用大量小 key 造成之後 list 效能不佳）；筆數不多（公司內部使用工具），直接整包讀寫即可。
+    let all = [];
+    try {
+      const existing = await logsStore.get('all-events', { type: 'json' });
+      if (Array.isArray(existing)) all = existing;
+    } catch (e) {
+      // 第一次使用、還沒有任何資料時會走到這裡，維持空陣列即可。
+    }
+    all.push(record);
+    // 最多保留 5000 筆，避免無限成長；超過時砍掉最舊的。
+    if (all.length > 5000) all = all.slice(all.length - 5000);
+    await logsStore.setJSON('all-events', all);
 
     return json(200, { ok: true, id: record.id });
   } catch (e) {
