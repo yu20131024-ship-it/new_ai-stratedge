@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.44)</title>
+<title>策引 A I - 行銷工作流，智慧分析、策略擬定、行銷規劃 (v2.3.47)</title>
 <!-- v2.3.37-testing：回應使用者提問——「輸入 Agnes Key 後是不是誤打到 Claude？」
      「是不是每分鐘超過 RPM 20？」新增 Agnes 專屬的 RPM 觀測與軟性節流。
      [確認①] callAI() 的分派邏輯（provider==='agnes' 時直接 return await callAgnes(...)，
@@ -13176,7 +13176,7 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-<script>window.APP_VERSION='v2.3.44';</script>
+<script>window.APP_VERSION='v2.3.47';</script>
 
 <!-- ============ Google 帳號登入關卡（v21.0 新增） ============
      沒有登入前，這層全螢幕遮罩會蓋住整個畫面，擋住所有功能。
@@ -13504,7 +13504,7 @@ async function adminDownloadFile(fileId){
     </div>
     <div>
       <div class="brand-text-title">策引AI</div>
-      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.44</span></div>
+      <div class="brand-text-sub">Strat Edge<span class="brand-version-badge" id="brand-version-badge">v2.3.47</span></div>
     </div>
     <div class="top-tagline">
       <span class="tagline-text"><span class="brand-subtitle-white" style="color:#ffffff!important;-webkit-text-fill-color:#ffffff!important;">AI 行銷工作流：智慧分析、策略擬定、行銷規劃</span></span>
@@ -14818,7 +14818,7 @@ function clearApiKey(){
 }
 
 // v20.2 新增：「測試連線」——在使用者真正按下「開始分析」、投入完整分析流程之前，
-// 先用一個極小的請求（少量 tokens、不啟用搜尋、15 秒逾時）快速驗證第三方金鑰是否可用，
+// 先用一個極小的請求（少量 tokens、不啟用搜尋、最多 50 秒逾時）快速驗證第三方金鑰是否可用，
 // 避免使用者辛苦填完整份表單、等了一段時間，才在正式分析時發現金鑰／CORS／額度有問題。
 async function testProviderConnection(provider){
   const inputEl=document.getElementById('api-key-input-'+provider);
@@ -14837,7 +14837,7 @@ async function testProviderConnection(provider){
   resultEl.textContent='測試中…';
   resultEl.style.color='var(--text-s)';
   const controller=new AbortController();
-  const timeoutId=setTimeout(()=>controller.abort(), 15000);
+  const timeoutId=setTimeout(()=>controller.abort(), 50000);
   try{
     const fn = provider==='gemini' ? callGemini : callAgnes;
     await fn('你是連線測試助手，請只回覆「測試成功」四個字，不要有其他內容。', '請回覆測試成功', 30, false, controller.signal);
@@ -14848,7 +14848,7 @@ async function testProviderConnection(provider){
     let msg;
     if(type==='cors_or_network') msg='✗ 連線失敗：請檢查 Agnes 端點或網路';
     else if(type==='proxy_or_network') msg='✗ 後端無法連到 Agnes：請檢查 Base URL／Netlify 網路路由';
-    else if(type==='timeout') msg='✗ 逾時無回應（15 秒內未回應）';
+    else if(type==='timeout') msg='✗ 逾時無回應（50 秒內未回應）';
     else if(type==='auth_error') msg='✗ 金鑰無效或權限不足';
     else msg='✗ 連線失敗：'+String(detail||'').slice(0,60);
     resultEl.textContent=msg;
@@ -14903,6 +14903,7 @@ function computeRetryWaitMs(resp, attempt){
 
 // v20.2 修復（原「效能過慢當機」根因之一）：舊版 fetch 完全沒有逾時機制（無 AbortController），
 // 若第三方 API 端網路真的卡住、無回應也無錯誤，畫面會永遠停在 loading，使用者只能重新整理整頁。
+// v2.3.47：Agnes 連線測試改為 50 秒；並加入官方國際備援端點自動切換。
 // v2.3.46：修復 Agnes Proxy 25 秒提前中止。
 // 實際截圖顯示 5,000-token 段落在約 31 秒時被判定為 proxy_or_network；
 // 根因是 Netlify proxy 舊版只等 25 秒，遠早於 Netlify 目前同步 Function 的 60 秒上限。
@@ -15288,13 +15289,29 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   const key=getKeyFor('agnes');
   if(!key) throw new Error('no_key:尚未設定 Agnes AI API Key');
 
-  // v2.3.46：所有新請求與 retry 統一由 doFetch() 內的 AgnesQuotaGuard.acquire() 取得配額。
-  // 官方正確端點：https://apihub.agnes-ai.com/v1
+  // v2.3.47：所有新請求與 retry 統一由 doFetch() 內的 AgnesQuotaGuard.acquire() 取得配額。
+  // 官方主要端點：https://apihub.agnes-ai.com/v1
+  // 官方文件另提供國際備援：https://apihub.agnes-ai.cn/v1；僅在網路/DNS/TLS/timeout
+  // 類型的連線失敗時切換，不在 401/403/429 等帳號或配額錯誤時切換。
   let baseUrl='https://apihub.agnes-ai.com/v1';
+  let agnesAutoFailover=true;
   try{
     const stored=sessionStorage.getItem('aicase_baseurl_agnes');
     if(stored && stored.trim()) baseUrl=stored.trim().replace(/\/+$/,'');
+    // 自訂端點不自動猜測另一個服務；只有官方國際兩個端點互相備援。
+    agnesAutoFailover=(baseUrl==='https://apihub.agnes-ai.com/v1' || baseUrl==='https://apihub.agnes-ai.cn/v1');
   }catch(e){}
+  const AGNES_PRIMARY_URL='https://apihub.agnes-ai.com/v1';
+  const AGNES_ALTERNATE_URL='https://apihub.agnes-ai.cn/v1';
+  function switchAgnesRoute(){
+    if(!agnesAutoFailover) return false;
+    const next = baseUrl===AGNES_PRIMARY_URL ? AGNES_ALTERNATE_URL : (baseUrl===AGNES_ALTERNATE_URL ? AGNES_PRIMARY_URL : '');
+    if(!next || next===baseUrl) return false;
+    baseUrl=next;
+    try{ sessionStorage.setItem('aicase_baseurl_agnes', baseUrl); }catch(e){}
+    try{ window.__aiDiag.agnesEndpoint=baseUrl; window.__aiDiag.status='Agnes 官方備援端點切換：'+baseUrl; }catch(e){}
+    return true;
+  }
 
   const messages=[
     {role:'system', content:flattenSystemPrompt(systemPrompt)},
@@ -15345,6 +15362,12 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   let resp;
   try{
     resp=await fetchWithRetry(doFetch, 2, (attempt,max,status,wait)=>{
+      // 只有真正的網路/DNS/TLS/timeout 或 proxy 502/504 才切換官方國際備援。
+      // 429/401/403/400 等服務端回應絕不切換，以免把帳號/配額問題誤當成路由問題。
+      if(status==='timeout' || status==='network_error' || status===502 || status===504){
+        const switched=switchAgnesRoute();
+        if(switched) console.warn('[callAgnes] 官方國際端點連線失敗，下一次 attempt 改走：'+baseUrl);
+      }
       console.info('[callAgnes] 伺服器忙線中（'+status+'），第 '+attempt+'/'+max+' 次重試，等待 '+(wait/1000)+' 秒…');
       if(window._onAiRetry) window._onAiRetry('Agnes AI', attempt, max, status);
     }, abortSignal, computeAttemptTimeoutMs(maxTokens));
@@ -15354,6 +15377,9 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
     throw new Error('proxy_or_network:Agnes AI 連線失敗。現在已改由 Netlify 伺服器中介呼叫，若仍失敗通常是 Netlify 到 Agnes 端點的網路／DNS 問題。端點：'+baseUrl);
   }
 
+  if(resp.ok && agnesAutoFailover){
+    try{ sessionStorage.setItem('aicase_baseurl_agnes', baseUrl); }catch(e){}
+  }
   if(!resp.ok){
     const errText=await resp.text().catch(()=>'');
     if(resp.status===401||resp.status===403) throw new Error('auth_error:Agnes AI API Key 無效或權限不足，請確認金鑰是否正確');

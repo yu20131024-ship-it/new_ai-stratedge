@@ -1,4 +1,13 @@
 
+## v2.3.47｜Agnes 連線測試與官方備援路由修復
+
+- 修正「測試連線」原本 15 秒自動 Abort，導致畫面顯示 `aborted_by_user` 的誤導性錯誤。現在測試最多等待 50 秒，並將逾時顯示為逾時。
+- Agnes 仍走同源 Netlify Proxy，避免瀏覽器 CORS。
+- 當官方國際主要端點 `https://apihub.agnes-ai.com/v1` 發生網路／DNS／TLS／timeout／502／504 類連線問題時，下一次 retry 會自動切換官方備援 `https://apihub.agnes-ai.cn/v1`。
+- 401／403／429／400 等帳號、權限、請求或配額錯誤不會切換端點。
+- 每一次實際 upstream attempt 仍先經過本地 Agnes RPM/RPD/TPM 守門，不用端點切換規避供應商限制。
+- 成功後會把可用官方端點暫存於本次瀏覽器 session，後續請求優先沿用。
+
 ### v2.3.46 本次修正
 - 修復 Agnes Proxy 固定 25 秒 upstream timeout；5,000-token 分段實際可能超過 25 秒，會在模型仍正常生成時被誤判為 `proxy_or_network`。
 - Netlify server-side proxy 等待上限調整為 55 秒；前端 Agnes 請求 timeout 同步調整為最多 55 秒。Netlify 官方目前同步 Function 執行上限為 60 秒，因此保留約 5 秒回傳緩衝。
