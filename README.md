@@ -1,3 +1,12 @@
+## v2.3.48｜Agnes 模型更新
+
+## v2.3.48｜Agnes 模型更新
+
+- 依 Agnes AI 官方目前公開文件，Agnes 預設模型由 `agnes-2.0-flash` 更新為 `agnes-2.5-flash`。官方文件指出 2.5 Flash 可直接沿用 OpenAI-compatible `/v1/chat/completions` 介面。
+- 保留 v2.3.47 的 Netlify Proxy、55 秒 upstream timeout、官方國際備援端點與本地 RPM/RPD/TPM 配額保護。
+- 本次只更換 model ID，不改動分析 Prompt、分段流程、Retry 或 quota guard，降低改版風險。
+- 若後續要採用 `agnes-3.0-flash`，建議先依帳號實際可用模型與官方文件確認後再切換。
+
 
 ## v2.3.47｜Agnes 連線測試與官方備援路由修復
 

@@ -9,7 +9,7 @@
      [確認①] callAI() 的分派邏輯（provider==='agnes' 時直接 return await callAgnes(...)，
        寫在 callClaude 分支之前）程式邏輯上不可能誤打到 Claude。已用真實原始碼端對端測試
        證明：provider='agnes' 時 callAgnes 恰好執行 1 次、callClaude／callGemini 皆為 0 次。
-       使用者截圖裡的診斷面板本身也顯示「供應商／模型：Agnes AI / agnes-2.0-flash」，
+       使用者截圖裡的診斷面板曾顯示「供應商／模型：Agnes AI / agnes-2.0-flash」；目前已依 Agnes 官方建議更新為 agnes-2.5-flash，
        與程式邏輯互相印證。
      [回應②] 新增 AgnesRateTracker：滾動 60 秒視窗的請求計數器，記錄「每一次真正送出去的
        HTTP 請求」（包含 fetchWithRetry 內部的重試——重試同樣會被供應商算進 RPM 配額）。
@@ -14452,6 +14452,14 @@ async function adminDownloadFile(fileId){
         <label class="form-label">Agnes AI API Key</label>
         <input id="api-key-input-agnes" type="password" class="form-ctrl" placeholder="貼上你的 Agnes AI API Key">
         <p class="form-hint">請貼上你的 Agnes AI API Key。Agnes AI 提供 OpenAI 相容的介面，可作為替代選項。若有 Base URL 需求，可在下方欄位設定。</p>
+        <div class="form-group" style="margin-top:10px">
+          <label class="form-label">Agnes AI 模型</label>
+          <select id="api-model-agnes" class="form-ctrl" onchange="saveAgnesModelPreference()">
+            <option value="agnes-2.5-flash" selected>agnes-2.5-flash（推薦）</option>
+            <option value="agnes-3.0-flash">agnes-3.0-flash</option>
+          </select>
+          <p class="form-hint">預設使用 <strong>agnes-2.5-flash</strong>。兩者皆走 OpenAI 相容的 Chat Completions；若你的 Agnes 帳號尚未開通其中一個模型，請改選另一個可用模型。</p>
+        </div>
         <p class="form-hint" style="color:var(--warning);font-weight:600">⚠ 提醒：這是第三方服務，穩定性與額度掌握在該服務方手中，本工具無法保證其可用性。建議先按下方「測試連線」確認可用，再進行正式分析，避免跑到一半才發現失敗。</p>
         <button type="button" class="btn btn-secondary btn-sm" onclick="testProviderConnection('agnes')" style="margin-top:6px">測試連線</button>
         <span id="test-conn-result-agnes" style="margin-left:8px;font-size:13px"></span>
@@ -14459,7 +14467,7 @@ async function adminDownloadFile(fileId){
       <div class="form-group">
         <label class="form-label">Agnes AI Base URL（選填，預設使用官方端點）</label>
         <input id="api-baseurl-agnes" type="text" class="form-ctrl" placeholder="https://apihub.agnes-ai.com/v1">
-        <p class="form-hint">留空則使用官方預設端點 <span style="color:var(--accent)">https://apihub.agnes-ai.com/v1</span>（model: agnes-2.0-flash）。目前 Agnes 請求會先經由本站 Netlify 後端中介，再連到 Agnes，可避免瀏覽器 CORS 阻擋；大輸出請求的 Proxy 等待上限已提高至 55 秒。</p>
+        <p class="form-hint">留空則使用官方預設端點 <span style="color:var(--accent)">https://apihub.agnes-ai.com/v1</span>（model: agnes-2.5-flash）。目前 Agnes 請求會先經由本站 Netlify 後端中介，再連到 Agnes，可避免瀏覽器 CORS 阻擋；大輸出請求的 Proxy 等待上限已提高至 55 秒。</p>
       </div>
     </div>
 
@@ -14732,6 +14740,7 @@ const PROVIDER_LABEL={claude:'Claude (Anthropic)', gemini:'Gemini (Google AI Stu
 
 function switchProviderTab(p){
   currentProviderTab=p;
+  if(p==='agnes') restoreAgnesModelPreference();
   document.querySelectorAll('.provider-tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.provider===p));
   document.getElementById('provider-pane-claude').style.display = p==='claude'?'block':'none';
   document.getElementById('provider-pane-gemini').style.display = p==='gemini'?'block':'none';
@@ -15285,6 +15294,38 @@ const AgnesQuotaGuard = {
 const AGNES_RPM_SOFT_LIMIT = 14; // backward-compatible diagnostic alias
 
 /* ---------------- call Agnes AI (OpenAI-compatible) API ---------------- */
+// v2.3.48：依 Agnes 官方目前公開模型文件，預設改用 agnes-2.5-flash。
+// 其與原 agnes-2.0-flash 使用相同 OpenAI-compatible chat/completions 介面，
+// 因此只需更換 model ID，不改動既有 Proxy、quota、retry 與分段分析流程。
+const AGNES_DEFAULT_MODEL_ID='agnes-2.5-flash';
+const AGNES_ALLOWED_MODEL_IDS=new Set(['agnes-2.5-flash','agnes-3.0-flash']);
+function getSelectedAgnesModel(){
+  try{
+    const el=document.getElementById('api-model-agnes');
+    const selected=el && el.value ? el.value.trim() : '';
+    if(selected && AGNES_ALLOWED_MODEL_IDS.has(selected)){
+      sessionStorage.setItem('aicase_model_agnes', selected);
+      return selected;
+    }
+    const stored=sessionStorage.getItem('aicase_model_agnes');
+    if(stored && AGNES_ALLOWED_MODEL_IDS.has(stored)) return stored;
+  }catch(e){}
+  return AGNES_DEFAULT_MODEL_ID;
+}
+function saveAgnesModelPreference(){
+  const model=getSelectedAgnesModel();
+  const el=document.getElementById('api-model-agnes');
+  if(el && el.value!==model) el.value=model;
+  try{ window.__aiDiag.model=model; }catch(e){}
+}
+function restoreAgnesModelPreference(){
+  const el=document.getElementById('api-model-agnes');
+  if(!el) return;
+  try{
+    const stored=sessionStorage.getItem('aicase_model_agnes');
+    el.value=(stored && AGNES_ALLOWED_MODEL_IDS.has(stored)) ? stored : AGNES_DEFAULT_MODEL_ID;
+  }catch(e){ el.value=AGNES_DEFAULT_MODEL_ID; }
+}
 async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abortSignal){
   const key=getKeyFor('agnes');
   if(!key) throw new Error('no_key:尚未設定 Agnes AI API Key');
@@ -15319,7 +15360,7 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   ];
   try{
     window.__aiDiag.provider='agnes';
-    window.__aiDiag.model='agnes-2.0-flash';
+    window.__aiDiag.model=getSelectedAgnesModel();
     window.__aiDiag.maxTokens=maxTokens||2000;
     window.__aiDiag.inputTokensEst=estimateTokens(messages[0].content)+estimateTokens(messages[1].content);
     window.__aiDiag.agnesRequestedMaxTokens=maxTokens||2000;
@@ -15350,7 +15391,7 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
         apiKey:key,
         baseUrl,
         request:{
-          model:'agnes-2.0-flash',
+          model:getSelectedAgnesModel(),
           max_tokens: effectiveMaxTokens,
           messages
         }
