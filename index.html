@@ -12961,44 +12961,154 @@ html body .fairview-contact-link,html body .fairview-line-button{font-size:.9rem
   html body .fairview-footer-main,html body .fairview-footer-contact{font-size:.86rem!important;}
 }
 </style>
+
+<style id="attribution-chart-height-fix">
+/* Attribution simulator: the SVG bars only need content height; do not inherit the global 34rem chart frame. */
+#out-attribution .attrib-chart-box{
+  width:100%;
+  height:auto!important;
+  min-height:0!important;
+  max-height:none!important;
+  overflow:visible!important;
+  box-sizing:border-box;
+  padding:16px 18px!important;
+  background:#ffffff!important;
+  border:1px solid #dce5f0!important;
+  border-radius:14px!important;
+  box-shadow:0 4px 14px rgba(15,23,42,.045)!important;
+}
+#out-attribution .attrib-chart-box svg{
+  display:block;
+  width:min(100%, 640px);
+  height:auto;
+  max-width:100%;
+  min-height:0;
+  margin:0 auto;
+}
+#out-attribution .attrib-chart-box + div{
+  margin-top:12px!important;
+}
+@media (max-width:680px){
+  #out-attribution .attrib-chart-box{
+    padding:12px 10px!important;
+    border-radius:12px!important;
+  }
+  #out-attribution .attrib-chart-box svg{
+    min-width:0!important;
+  }
+}
+</style>
+<script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
 </head>
 <body>
-<script>window.APP_VERSION='v2.3.25-test-no-google-login';</script>
+<script>window.APP_VERSION='v2.3.26-google-login-restored';</script>
 
-<!-- ============ Google 帳號登入功能暫時關閉（測試模式） ============
-     依需求：測試期間不顯示 Google 登入遮罩、不強制登入。
-     Netlify Identity 程式碼暫保留，待測試完成後可再恢復。
-     注意：管理後台仍維持原本伺服器端登入驗證，不因前端測試模式而放寬權限。 -->
-<div id="auth-gate" style="display:none!important"></div>
+<!-- ============ Google 帳號登入關卡（恢復） ============
+     Google / Netlify Identity 已恢復。前端登入關卡只負責使用體驗；管理資料與檔案的
+     權限仍由 Netlify Functions 重新驗證 JWT，不能以修改前端繞過伺服器端權限。 -->
+<div id="auth-gate" style="position:fixed;inset:0;z-index:99999;background:linear-gradient(135deg,#0F172A,#0A3326);display:flex;align-items:center;justify-content:center;flex-direction:column;color:#fff;text-align:center;padding:24px;font-family:'Noto Sans TC',system-ui,-apple-system,sans-serif">
+  <div style="font-size:24px;font-weight:700;margin-bottom:8px">策引 AI｜Strat Edge</div>
+  <div style="font-size:15px;opacity:.75;margin-bottom:30px">請使用 Google 帳號登入後繼續使用</div>
+  <button id="auth-gate-login-btn" onclick="netlifyIdentity.open('login')" style="padding:13px 30px;border-radius:999px;border:none;background:#059669;color:#fff;font-size:16px;font-weight:600;cursor:pointer;display:inline-flex;align-items:center;gap:8px">
+    使用 Google 帳號登入
+  </button>
+  <div id="auth-gate-status" style="margin-top:18px;font-size:13px;opacity:.55">尚未登入</div>
+  <div style="margin-top:10px;font-size:12px;opacity:.4">
+    按鈕沒反應？<a href="#" onclick="event.preventDefault();window.location.href='/.netlify/identity/authorize?provider=google';return false;" style="color:#7dd3fc;text-decoration:underline">改用直接跳轉登入</a>
+  </div>
+</div>
 
 <script>
 (function(){
-  // Google / Netlify Identity 登入功能暫停：測試期間直接放行前端使用。
-  window.__googleLoginDisabled = true;
-  window.__currentIdentityUser = null;
-  window.__isAdminUser = false;
-  document.documentElement.style.overflow = '';
+  function showGate(msg){
+    var g=document.getElementById('auth-gate');
+    if(g) g.style.display='flex';
+    document.documentElement.style.overflow='hidden';
+    var s=document.getElementById('auth-gate-status');
+    if(s && msg) s.textContent=msg;
+  }
+  function hideGate(){
+    var g=document.getElementById('auth-gate');
+    if(g) g.style.display='none';
+    document.documentElement.style.overflow='';
+  }
 
-  // 保留下載/事件紀錄介面；未登入時依既有後端匿名下載紀錄流程送出。
+  window.__googleLoginDisabled = false;
+  window.__currentIdentityUser = null;
+
   window.__logEvent = function(type, extra){
+    var user = window.__currentIdentityUser;
     var body = Object.assign({type:type}, extra||{});
-    if(type === 'login') return Promise.resolve();
-    return fetch('/.netlify/functions/log-event', {
-      method:'POST',
-      headers:{'Content-Type':'application/json'},
-      body: JSON.stringify(body)
-    }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
+    var hasStoredToken = !!(user && user.token && user.token.access_token);
+    if(type === 'login'){
+      if(!hasStoredToken) return Promise.resolve();
+      return user.jwt().then(function(freshToken){
+        return fetch('/.netlify/functions/log-event', {
+          method:'POST',
+          headers:{'Content-Type':'application/json','Authorization':'Bearer '+freshToken},
+          body: JSON.stringify(body)
+        });
+      }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
+    }
+    function sendAnonymous(){
+      return fetch('/.netlify/functions/log-event', {
+        method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(body)
+      }).catch(function(e){ console.warn('[log-event] 記錄失敗（不影響原本功能）', e); });
+    }
+    if(!hasStoredToken) return sendAnonymous();
+    return user.jwt().then(function(freshToken){
+      return fetch('/.netlify/functions/log-event', {
+        method:'POST',
+        headers:{'Content-Type':'application/json','Authorization':'Bearer '+freshToken},
+        body: JSON.stringify(body)
+      });
+    }).catch(function(e){
+      console.warn('[log-event] 換新 token 失敗，改用匿名方式記錄下載', e);
+      return sendAnonymous();
+    });
   };
 
-  // 測試模式隱藏需要 Google 身份的管理/登出入口。
-  function disableIdentityUI(){
-    var admin=document.getElementById('admin-panel-btn');
-    if(admin) admin.style.display='none';
-    var logout=document.getElementById('logout-btn');
-    if(logout) logout.style.display='none';
+  function updateAdminUI(user){
+    var admin = !!(user && user.email && user.email.trim().toLowerCase()==='felix670131@gmail.com');
+    window.__isAdminUser = admin;
+    var btn = document.getElementById('admin-panel-btn');
+    if(btn) btn.style.display = admin ? 'inline-flex' : 'none';
   }
-  if(document.readyState === 'loading') document.addEventListener('DOMContentLoaded', disableIdentityUI);
-  else disableIdentityUI();
+
+  if(typeof netlifyIdentity === 'undefined'){
+    showGate('登入服務載入失敗，請確認網路連線並重新整理頁面');
+    return;
+  }
+
+  netlifyIdentity.on('init', function(user){
+    window.__currentIdentityUser = user;
+    if(user){ hideGate(); updateAdminUI(user); }
+    else { showGate('尚未登入'); }
+  });
+  netlifyIdentity.on('login', function(user){
+    window.__currentIdentityUser = user;
+    hideGate();
+    updateAdminUI(user);
+    window.__logEvent('login');
+    netlifyIdentity.close();
+  });
+  netlifyIdentity.on('logout', function(){
+    window.__currentIdentityUser = null;
+    updateAdminUI(null);
+    showGate('已登出');
+  });
+  netlifyIdentity.on('error', function(err){
+    console.error('[netlifyIdentity]', err);
+    showGate('登入發生錯誤，請重新嘗試');
+  });
+  netlifyIdentity.init({ APIUrl: window.location.origin + '/.netlify/identity' });
+
+  document.addEventListener('DOMContentLoaded', function(){
+    updateAdminUI(window.__currentIdentityUser);
+  });
+  if(document.readyState === 'complete' || document.readyState === 'interactive'){
+    updateAdminUI(window.__currentIdentityUser);
+  }
 })();
 </script>
 
@@ -16381,11 +16491,18 @@ function buildUserPrompt(d){
 【務必遵守】上方「公司名稱／個人品牌名稱」「經營主體類型」與「產業別」不是背景資訊而已，五層分析（描述型／洞察型／預測型／外部變因／建議型）、競品搜尋方向、以及 SWOT 的每一點都必須具體對應到此品牌、經營主體類型與產業別，不可寫出換成任何品牌或產業都通用的空泛內容。`;
 }
 
-async function computeAnalysisAI(d, abortSignal){
+async function computeAnalysisAI(d, abortSignal, progressCallback){
+  // progressCallback(stageIndex, percent, label) 讓 UI 只在真正完成對應處理後前進，
+  // 不再使用與 API 實際流程無關的固定時間輪播。
+  const reportStage = (stageIndex, percent) => {
+    if(typeof progressCallback === 'function') progressCallback(stageIndex, percent);
+  };
   // 成本優化（Prompt Caching）：sys 拆成 cached（同一 orgType 下逐字不變的巨大靜態內容）
   // 與 dynamic（每次都會變動的日期資訊＋使用者勾選的技能模組）兩段，見 callClaude 內的組裝邏輯。
   const quickMode = isQuickMode();
   const usr=buildUserPrompt(d);
+  // 已完成輸入資料整理，開始進入產業基準與原因比對。
+  reportStage(1, 24);
   // 根本修復：原本固定 max_tokens:4000，對「五層分析＋競品＋SWOT」的基礎 JSON 而言已經偏緊，
   // 若使用者另外勾選了任何加值技能模組（全漏斗規劃／CRO稽核／SEO矩陣／競品矩陣／評論情緒探勘，
   // 每個模組都要求輸出一大段完整分析文字），總長度很容易超過 4000 tokens 而被 API 從中間截斷，
@@ -16441,6 +16558,8 @@ async function computeAnalysisAI(d, abortSignal){
     throw err;
   }
   const j=extractJson(raw);
+  // AI 已完成回應並成功解析結構化結果，三情境預測資料現在可供整理。
+  reportStage(2, 52);
 
   const aiBench = getFallbackBenchmark(d);
   const ctr = d.ctr || aiBench.ctr;
@@ -16477,6 +16596,8 @@ async function computeAnalysisAI(d, abortSignal){
     competitorNote: j.perceptualMap.competitorNote || '',
     note: j.perceptualMap.note || null
   } : null;
+  // 外部市場變因、競品與 SWOT 等環境資料已完成整理。
+  reportStage(3, 76);
 
   function toHtmlAi(text){
     // 根本修復：不再信任模型自行輸出的 <b>/<br> 等 HTML 標籤（模型偶爾會把它們二次跳脫成
@@ -16486,7 +16607,7 @@ async function computeAnalysisAI(d, abortSignal){
     const safe = esc(String(text||'')).replace(/\*\*(.+?)\*\*/g,'<b>$1</b>');
     return safe.split(/\n\n+/).map(para=>`<p style="margin:0 0 10px 0">${para.replace(/\n/g,'<br>')}</p>`).join('');
   }
-  return {
+  const result = {
     descHtml: toHtmlAi(j.descriptive),
     causeHtml: toHtmlAi(j.diagnostic),
     actionHtml: toHtmlAi(j.prescriptive),
@@ -16497,6 +16618,9 @@ async function computeAnalysisAI(d, abortSignal){
     realCitations: realCitations || [], // 搜尋工具伺服器端實際回傳的真實網址，用於第 10 節可查證來源
     skillOutputs: j.skillOutputs || null // 使用者勾選之加值行銷技能模組產出（問題4）
   };
+  // 五層分析所需的建議與最終資料結構已完成，正式進入最後一步行動建議。
+  reportStage(4, 94);
+  return result;
 }
 /* ---------------- step 2: 執行分析流程 ---------------- */
 function parseAiError(err){
@@ -16585,35 +16709,24 @@ function runAnalysis(){
     }
   },300) : null;
 
-  let progress=1;
+  const steps=['alyz-step-1','alyz-step-2','alyz-step-3','alyz-step-4','alyz-step-5'];
+  const stagePercents=[8,24,52,76,94];
+  let progress=8;
   function setAnalysisProgress(value){
-    progress=Math.max(progress, Math.min(99, value));
+    progress=Math.max(progress, Math.min(100, value));
     percentNum.textContent=Math.round(progress);
     percentBar.style.width=progress+'%';
   }
-  percentNum.textContent=progress;
-  percentBar.style.width=progress+'%';
-  const steps=['alyz-step-1','alyz-step-2','alyz-step-3','alyz-step-4','alyz-step-5'];
-  steps.forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===0));
-  if(diagStageEl) diagStageEl.textContent=stageLabels[0];
-  window.__aiDiag.stage=stageLabels[0];
-  // 只做「視覺上的步驟輪播」，不再用來計算完成所需的最短時間。
-  const stepCycleMs=isAiMode()?2600:700;
-  // 只保留極短的最短顯示時間（避免太快閃過造成畫面跳動感），不再是效能瓶頸來源。
-  const minimumLoadingMs=isAiMode()?1400:900;
+  function setAnalysisStage(stageIdx, percent=stagePercents[stageIdx]){
+    const idx=Math.max(0, Math.min(steps.length-1, stageIdx));
+    steps.forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===idx));
+    if(diagStageEl) diagStageEl.textContent=stageLabels[idx];
+    if(window.__aiDiag) window.__aiDiag.stage=stageLabels[idx];
+    setAnalysisProgress(percent);
+  }
+  setAnalysisStage(0, stagePercents[0]);
+  const minimumLoadingMs=isAiMode()?900:500;
   const analysisStartedAt=Date.now();
-  let s=0;
-  const interval=setInterval(()=>{
-    s++;
-    const stageIdx=Math.min(s,steps.length-1);
-    steps.forEach((id,i)=>document.getElementById(id).classList.toggle('on',i===stageIdx));
-    if(diagStageEl) diagStageEl.textContent=stageLabels[stageIdx];
-    window.__aiDiag.stage=stageLabels[stageIdx];
-    // 真實進度：呼叫真的還沒回來時，用很慢的速度小幅推進，最高只到 85%，
-    // 讓使用者知道「還在跑」，但不會假裝知道確切完成時間（不再是裝飾性假百分比）。
-    setAnalysisProgress(Math.min(85, progress+3));
-    if(s>=steps.length-1) clearInterval(interval);
-  },stepCycleMs);
 
   // 取消按鈕：真的卡住時使用者可主動中止，不必乾等或重新整理整頁。
   let aborted=false;
@@ -16624,7 +16737,6 @@ function runAnalysis(){
     cancelBtn.onclick=()=>{
       aborted=true;
       window._currentAnalysisAbort.abort();
-      clearInterval(interval);
       if(diagTickInterval) clearInterval(diagTickInterval);
       window.__aiDiag.status='已取消';
       cancelBtn.style.display='none';
@@ -16641,8 +16753,8 @@ function runAnalysis(){
     const waitMs=Math.max(0, minimumLoadingMs-elapsed);
     setTimeout(()=>{
       if(aborted) return;
-      clearInterval(interval);
       if(diagTickInterval) clearInterval(diagTickInterval);
+      setAnalysisStage(4, 94);
       if(diagElapsedEl && window.__aiDiag.startedAt) diagElapsedEl.textContent=((Date.now()-window.__aiDiag.startedAt)/1000).toFixed(1)+' 秒（完成）';
       if(diagActualTokensEl){
         const u=window.__aiDiag.actualUsage;
@@ -16673,11 +16785,19 @@ function runAnalysis(){
   const provider=getProvider();
 
   if(isAiMode()){
-    computeAnalysisAI(data, window._currentAnalysisAbort.signal).then(a=>{
+    // 第 1 階段先讓使用者看見輸入資料整理完成，再進入產業基準比對。
+    // 後續百分比只由真正完成的分析事件推進，不再依固定時間輪播。
+    setTimeout(()=>{
+      if(aborted) return;
+      setAnalysisStage(1, 24);
+      computeAnalysisAI(data, window._currentAnalysisAbort.signal, (stageIdx, pct)=>{
+        if(aborted) return;
+        setAnalysisStage(stageIdx, pct);
+      }).then(a=>{
       window._onAiRetry=null;
       window.__aiDiag.status='成功';
       if(diagStatusEl) diagStatusEl.textContent='成功';
-      setAnalysisProgress(96);
+      setAnalysisStage(4, 94);
       completeWhenLoadingReady(a, ()=>{
         toast(PROVIDER_LABEL[provider]+' 五層分析完成（含即時搜尋的競品與 SWOT）','success',4200);
       });
@@ -16692,7 +16812,16 @@ function runAnalysis(){
       if(diagErrorRow && diagErrorText){ diagErrorRow.style.display='block'; diagErrorText.textContent=err.message.slice(0,300); }
       const a=computeAnalysis(data);
       const {type, detail} = parseAiError(err);
-      completeWhenLoadingReady(a, ()=>{
+      // API 失敗時仍維持五階段邏輯：規則引擎接手後依序完成情境、外部變因與行動建議，
+      // 不直接從第 2 階段跳到 99%。
+      setAnalysisStage(2, 52);
+      setTimeout(()=>{
+        if(aborted) return;
+        setAnalysisStage(3, 76);
+        setTimeout(()=>{
+          if(aborted) return;
+          setAnalysisStage(4, 94);
+          completeWhenLoadingReady(a, ()=>{
         if(type==='no_key'){
           toast('未偵測到 API Key，已改用規則模擬分析','warning');
         }else if(type==='cors_or_network'){
@@ -16716,17 +16845,34 @@ function runAnalysis(){
         }else{
           toast('呼叫 '+PROVIDER_LABEL[provider]+' API 失敗，已自動改用規則模擬分析（'+detail.slice(0,80)+'）','warning',5500,'複製診斷資訊',copyLastErrorDiagnostics);
         }
-      });
-    });
+              });
+            },180);
+          },180);
+        });
+      },350);
   }else{
+    // 規則模擬模式沒有 API 回應事件，因此每個階段對應到實際的本地計算步驟；
+    // 第 1 階段先完成輸入資料整理，再開始產業基準比對，不再用固定輪播假裝進度。
     setTimeout(()=>{
       if(aborted) return;
-      const a=computeAnalysis(data);
-      setAnalysisProgress(96);
-      completeWhenLoadingReady(a, ()=>{
-        toast('五層分析完成（規則模擬模式，含示意性競品與 SWOT）','success',4000);
-      });
-    },600);
+      setAnalysisStage(1, 24);
+      setTimeout(()=>{
+        if(aborted) return;
+        const a=computeAnalysis(data);
+        setAnalysisStage(2, 52);
+        setTimeout(()=>{
+          if(aborted) return;
+          setAnalysisStage(3, 76);
+          setTimeout(()=>{
+            if(aborted) return;
+            setAnalysisStage(4, 94);
+            completeWhenLoadingReady(a, ()=>{
+              toast('五層分析完成（規則模擬模式，含示意性競品與 SWOT）','success',4000);
+            });
+          },250);
+        },250);
+      },250);
+    },400);
   }
 }
 
@@ -16736,17 +16882,20 @@ function finishAnalysis(a, btn){
   const percentNum=document.getElementById('analysis-percent-num');
   const percentBar=document.getElementById('analysis-percent-bar');
   const currentProgress = percentNum ? Math.min(99, Math.max(1, parseInt(percentNum.textContent,10) || 1)) : 100;
-  let completionDelay = 260;
+  let completionDelay = 520;
   if(percentNum && percentBar){
-    let doneProgress=currentProgress;
-    const completionStepMs=420;
-    completionDelay=(100-currentProgress)*completionStepMs+220;
-    const completionTimer=setInterval(()=>{
-      doneProgress=Math.min(100, doneProgress+1);
-      percentNum.textContent=doneProgress;
-      percentBar.style.width=doneProgress+'%';
-      if(doneProgress>=100) clearInterval(completionTimer);
-    },completionStepMs);
+    const startProgress=currentProgress;
+    const completionStart=performance.now();
+    const completionDuration=480;
+    const animateCompletion=()=>{
+      const t=Math.min(1,(performance.now()-completionStart)/completionDuration);
+      const eased=1-Math.pow(1-t,3);
+      const value=Math.round(startProgress+(100-startProgress)*eased);
+      percentNum.textContent=value;
+      percentBar.style.width=value+'%';
+      if(t<1) requestAnimationFrame(animateCompletion);
+    };
+    requestAnimationFrame(animateCompletion);
   }
   document.getElementById('out-desc').innerHTML=collapsibleHtml(a.descHtml || '（無內容，請改用規則模擬重試）');
   document.querySelectorAll('.desc-funnel-panel').forEach(el=>el.remove());
@@ -18098,7 +18247,7 @@ function renderAttribModelDetail(){
 
   holder.innerHTML = `
     <div class="insight-limit" style="margin-bottom:12px">${esc(meta.desc)}</div>
-    <div class="chart-box" style="height:auto;overflow:visible">${svgBarChart(rows, maxVal, 640, 28)}</div>
+    <div class="attrib-chart-box">${svgBarChart(rows, maxVal, 640, 28)}</div>
     <div style="margin-top:10px;padding:10px 14px;background:rgba(248,250,252,.8);border:1px solid rgba(203,213,225,.5);border-radius:10px">
       <div style="font-size:13px;color:var(--slate-500);margin-bottom:4px">相對於「目前假設平均分配」（每管道 ${equalShare.toFixed(1)}%）的建議調整方向：</div>
       ${deltaRows}
