@@ -12833,6 +12833,26 @@ html body :is(.compact-note.static-note p,.compact-note.static-note p:hover,.com
 }
 </style>
 <script src="https://identity.netlify.com/v1/netlify-identity-widget.js"></script>
+
+<style id="fairview-footer-enhancement">
+.fairview-footer{margin-top:1.5rem;padding:1.5rem 1rem 1rem;border-top:1px solid rgba(255,255,255,.08);}
+.fairview-footer-main{line-height:1.9;color:var(--slate-300,#cbd5e1);overflow-wrap:anywhere;}
+.fairview-brand-link,.fairview-contact-link{color:inherit;text-decoration:none;transition:opacity .2s ease,filter .2s ease;}
+.fairview-brand-link{font-weight:700;}
+.fairview-brand-link:hover,.fairview-contact-link:hover{opacity:.85;text-decoration:underline;}
+.fairview-footer-contact{display:flex;justify-content:center;align-items:center;flex-wrap:wrap;gap:.55rem 1rem;margin-top:.55rem;line-height:1.8;overflow-wrap:anywhere;}
+.fairview-contact-title{font-weight:700;color:#fff;}
+.fairview-line-button{font:inherit;border:0;background:none;padding:0;cursor:pointer;}
+.fairview-qr-overlay{position:fixed;inset:0;z-index:99999;display:flex;align-items:center;justify-content:center;padding:1rem;background:rgba(0,0,0,.72);backdrop-filter:blur(4px);}
+.fairview-qr-card{width:min(92vw,390px);padding:1.5rem;border-radius:20px;background:#111827;color:#fff;box-shadow:0 24px 80px rgba(0,0,0,.45);text-align:center;border:1px solid rgba(255,255,255,.12);}
+.fairview-qr-card h3{margin:0 0 .4rem;font-size:1.25rem;}
+.fairview-qr-card p{margin:.25rem 0 1rem;color:#cbd5e1;}
+.fairview-qr-image{display:block;width:min(72vw,270px);height:auto;aspect-ratio:1;margin:0 auto 1rem;background:#fff;padding:12px;border-radius:12px;}
+.fairview-qr-close{border:1px solid rgba(255,255,255,.16);background:#1f2937;color:#fff;border-radius:10px;padding:.6rem 1.2rem;cursor:pointer;}
+.fairview-qr-close:hover{background:#374151;}
+@media(max-width:640px){.fairview-footer-contact{flex-direction:column;gap:.3rem}.fairview-footer{padding-left:.75rem;padding-right:.75rem}}
+</style>
+
 </head>
 <body>
 <script>window.APP_VERSION='v2.3.24';</script>
@@ -14021,9 +14041,16 @@ async function adminDownloadFile(fileId){
     </div>
   </div>
 
-  <footer class="foot">
-    策引 A I — 用一致的資料、實驗與流程做行銷決策
-    <div style="margin-top:6px">
+  <footer class="foot fairview-footer">
+    <div class="fairview-footer-main">
+      © 2026 <a class="fairview-brand-link" href="https://project0983487908.netlify.app" target="_blank" rel="noopener noreferrer">澄思 AI Studio</a> · LUCIDMIND AI STUDIO · 重要的決定，不必一個人想。
+    </div>
+    <div class="fairview-footer-contact">
+      <span class="fairview-contact-title">聯絡方式</span>
+      <a class="fairview-contact-link" href="https://mail.google.com/mail/?view=cm&amp;fs=1&amp;to=project0983487908%40gmail.com&amp;su=%E7%AD%96%E5%BC%95AI-%E5%BB%BA%E8%AD%B0%E5%92%8C%E9%9C%80%E6%B1%82" target="_blank" rel="noopener noreferrer" aria-label="開啟 Gmail 撰寫郵件">信箱：project0983487908@gmail.com</a>
+      <button class="fairview-contact-link fairview-line-button" type="button" onclick="openLineFriendQr()" aria-label="開啟 Line 加入好友 QR-CODE">Line：felix_line</button>
+    </div>
+    <div style="margin-top:10px">
       <span class="tag">MarketOps</span><span class="tag">Decision Workflow</span><span class="tag">Benchmarks</span><span class="tag">Creative Ops</span><span class="tag">Reporting</span>
     </div>
   </footer>
@@ -14039,16 +14066,28 @@ async function adminDownloadFile(fileId){
     <p class="desc">若想讓 AI 依你的實際輸入即時搜尋網路並生成更細緻的五層分析（含真實競品與 SWOT）、文案與圖片Prompt，可選擇下方任一供應商並貼上 API Key。此單檔版本會把金鑰暫存在本次瀏覽器分頁記憶體（sessionStorage），不會主動上傳到任何自有伺服器。</p>
 
     <div class="provider-tabs" id="provider-tabs">
-      <button class="provider-tab-btn active" data-provider="claude" onclick="switchProviderTab('claude')">Claude (Anthropic)</button>
-      <button class="provider-tab-btn" data-provider="gemini" onclick="switchProviderTab('gemini')">Gemini (Google AI Studio)</button>
+      <button class="provider-tab-btn active" data-provider="claude" onclick="switchProviderTab('claude')">Claude</button>
+      <button class="provider-tab-btn" data-provider="gemini" onclick="switchProviderTab('gemini')">Gemini</button>
       <button class="provider-tab-btn" data-provider="agnes" onclick="switchProviderTab('agnes')">Agnes AI</button>
+      <button class="provider-tab-btn" data-provider="nvidia" onclick="switchProviderTab('nvidia')">NVIDIA NIM</button>
+      <button class="provider-tab-btn" data-provider="groq" onclick="switchProviderTab('groq')">GroqCloud</button>
+      <button class="provider-tab-btn" data-provider="openrouter" onclick="switchProviderTab('openrouter')">OpenRouter</button>
+      <button class="provider-tab-btn" data-provider="mistral" onclick="switchProviderTab('mistral')">Mistral AI</button>
     </div>
 
     <div id="provider-pane-claude" class="provider-pane">
       <div class="form-group">
         <label class="form-label">Anthropic API Key</label>
         <input id="api-key-input-claude" type="password" class="form-ctrl" placeholder="sk-ant-...">
-        <p class="form-hint">可在 <span style="color:var(--accent)">console.anthropic.com</span> 取得金鑰。瀏覽器直連支援穩定，啟用後將自動開啟網路搜尋工具，分析會引用即時搜尋結果。</p>
+        <p class="form-hint">官方 Messages API：<b>POST /v1/messages</b>。模型 ID 可自行修改，不綁死任何免費／低價模型。</p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">主要模型 ID</label>
+        <input id="api-model-input-claude" type="text" class="form-ctrl" placeholder="例如 claude-sonnet-5">
+      </div>
+      <div class="form-group">
+        <label class="form-label">輕量模型 ID（文案／Prompt 等次要任務）</label>
+        <input id="api-model-light-input-claude" type="text" class="form-ctrl" placeholder="例如 claude-haiku-4-5-20251001">
       </div>
     </div>
     <div id="provider-pane-gemini" class="provider-pane" style="display:none">
@@ -14056,9 +14095,14 @@ async function adminDownloadFile(fileId){
         <label class="form-label">Google AI Studio API Key</label>
         <input id="api-key-input-gemini" type="password" class="form-ctrl" placeholder="AIzaSy... 或 AQ.Ab8...">
         <p class="form-hint">可在 <span style="color:var(--accent)">aistudio.google.com/apikey</span> 取得金鑰，支援 <b>AIzaSy</b> 開頭（標準格式）與 <b>AQ.</b> 開頭（新格式）兩種金鑰。啟用後將自動開啟 Google 搜尋工具。</p>
-        <p class="form-hint" style="color:var(--warning);font-weight:600">⚠ 已知限制：Gemini API 在純前端（瀏覽器直連、無後端伺服器中介）環境下，較常遇到瀏覽器 CORS 跨域限制而直接連線失敗，這是 Google AI Studio API 本身的限制，不是這把金鑰或本工具設定錯誤。建議先按下方「測試連線」確認可用，若持續失敗，建議改用 Claude API。</p>
+        <p class="form-hint">Google 官方目前提供 OpenAI-compatible API；本專案仍保留原生 generateContent 路徑以維持 Google Search grounding。API Key 請依 Google 目前的授權金鑰規範建立。</p>
         <button type="button" class="btn btn-secondary btn-sm" onclick="testProviderConnection('gemini')" style="margin-top:6px">測試連線</button>
         <span id="test-conn-result-gemini" style="margin-left:8px;font-size:13px"></span>
+      </div>
+      <div class="form-group">
+        <label class="form-label">模型 ID（可自行更新）</label>
+        <input id="api-model-input-gemini" type="text" class="form-ctrl" placeholder="例如 gemini-2.5-flash">
+      </div>
       </div>
     </div>
     <div id="provider-pane-agnes" class="provider-pane" style="display:none">
@@ -14073,8 +14117,34 @@ async function adminDownloadFile(fileId){
       <div class="form-group">
         <label class="form-label">Agnes AI Base URL（選填，預設使用官方端點）</label>
         <input id="api-baseurl-agnes" type="text" class="form-ctrl" placeholder="https://apihub.agnes-ai.com/v1">
-        <p class="form-hint">留空則使用官方預設端點 <span style="color:var(--accent)">https://apihub.agnes-ai.com/v1</span>（model: agnes-2.0-flash）。</p>
+        <p class="form-hint">留空則使用官方預設端點 <span style="color:var(--accent)">https://apihub.agnes-ai.com/v1</span>。模型 ID 不再寫死，可隨原廠更新自行輸入。</p>
       </div>
+      <div class="form-group">
+        <label class="form-label">主要模型 ID</label>
+        <input id="api-model-input-agnes" type="text" class="form-ctrl" placeholder="agnes-2.5-flash">
+        <p class="form-hint">目前依 Agnes 客服提供資訊，預設為 <b>agnes-2.5-flash</b>；亦可切換為 <b>agnes-3.0-flash</b> 或未來原廠新模型。</p>
+      </div>
+    </div>
+
+    <div id="provider-pane-nvidia" class="provider-pane" style="display:none">
+      <div class="form-group"><label class="form-label">NVIDIA NIM API Key</label><input id="api-key-input-nvidia" type="password" class="form-ctrl" placeholder="nvapi-..."><p class="form-hint">官方端點：<b>https://integrate.api.nvidia.com/v1</b>；支援 OpenAI-compatible Chat Completions。</p></div>
+      <div class="form-group"><label class="form-label">模型 ID（可自行更新）</label><input id="api-model-input-nvidia" type="text" class="form-ctrl" placeholder="輸入 NVIDIA NIM 目前可用模型 ID"></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="testProviderConnection('nvidia')">測試連線</button><span id="test-conn-result-nvidia" style="margin-left:8px;font-size:13px"></span>
+    </div>
+    <div id="provider-pane-groq" class="provider-pane" style="display:none">
+      <div class="form-group"><label class="form-label">GroqCloud API Key</label><input id="api-key-input-groq" type="password" class="form-ctrl" placeholder="gsk_..."><p class="form-hint">官方 OpenAI-compatible Base URL：<b>https://api.groq.com/openai/v1</b>。</p></div>
+      <div class="form-group"><label class="form-label">模型 ID（可自行更新）</label><input id="api-model-input-groq" type="text" class="form-ctrl" placeholder="例如 openai/gpt-oss-20b"></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="testProviderConnection('groq')">測試連線</button><span id="test-conn-result-groq" style="margin-left:8px;font-size:13px"></span>
+    </div>
+    <div id="provider-pane-openrouter" class="provider-pane" style="display:none">
+      <div class="form-group"><label class="form-label">OpenRouter API Key</label><input id="api-key-input-openrouter" type="password" class="form-ctrl" placeholder="sk-or-..."><p class="form-hint">官方 OpenAI-compatible Base URL：<b>https://openrouter.ai/api/v1</b>；模型目錄可由 API 動態取得。</p></div>
+      <div class="form-group"><label class="form-label">模型 ID（可自行更新）</label><input id="api-model-input-openrouter" type="text" class="form-ctrl" placeholder="輸入 OpenRouter model slug 或 latest alias"></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="testProviderConnection('openrouter')">測試連線</button><span id="test-conn-result-openrouter" style="margin-left:8px;font-size:13px"></span>
+    </div>
+    <div id="provider-pane-mistral" class="provider-pane" style="display:none">
+      <div class="form-group"><label class="form-label">Mistral AI Studio API Key</label><input id="api-key-input-mistral" type="password" class="form-ctrl" placeholder="貼上 Mistral API Key"><p class="form-hint">官方 OpenAI-compatible Base URL：<b>https://api.mistral.ai/v1</b>。</p></div>
+      <div class="form-group"><label class="form-label">模型 ID（可自行更新）</label><input id="api-model-input-mistral" type="text" class="form-ctrl" placeholder="例如 mistral-large-latest"></div>
+      <button type="button" class="btn btn-secondary btn-sm" onclick="testProviderConnection('mistral')">測試連線</button><span id="test-conn-result-mistral" style="margin-left:8px;font-size:13px"></span>
     </div>
 
     <div class="ai-mode-row" id="modal-current-mode" style="display:none !important;"></div>
@@ -14308,6 +14378,7 @@ function initInlineExpandObserver(){
 /* ---------------- API key management (multi-provider) ---------------- */
 let currentProviderTab='claude';
 function getProvider(){ try{ return sessionStorage.getItem('aicase_provider')||''; }catch(e){ return ''; } }
+function providerSupportsSearch(provider){ return provider==='claude' || provider==='gemini'; }
 function setProvider(p){ try{ sessionStorage.setItem('aicase_provider', p); }catch(e){} }
 // v20.2 關鍵修復（本版最重大的一項）：
 // 舊版在此處寫死一組「Agnes AI 公開測試金鑰」，並在 autoInitDefaultProvider() 中，
@@ -14339,14 +14410,27 @@ window.addEventListener('DOMContentLoaded', function(){
   if(typeof refreshApiUi === 'function') refreshApiUi();
 });
 
-const PROVIDER_LABEL={claude:'Claude (Anthropic)', gemini:'Gemini (Google AI Studio)', agnes:'Agnes AI'};
+const PROVIDER_LABEL={claude:'Claude (Anthropic)', gemini:'Gemini (Google AI Studio)', agnes:'Agnes AI', nvidia:'NVIDIA NIM', groq:'GroqCloud', openrouter:'OpenRouter', mistral:'Mistral AI Studio'};
+const PROVIDER_DEFAULTS={
+  claude:{model:'claude-sonnet-5',lightModel:'claude-haiku-4-5-20251001'},
+  gemini:{model:'gemini-2.5-flash'},
+  agnes:{model:'agnes-2.5-flash',baseUrl:'https://apihub.agnes-ai.com/v1'},
+  nvidia:{model:'deepseek-ai/deepseek-v4-flash',baseUrl:'https://integrate.api.nvidia.com/v1'},
+  groq:{model:'openai/gpt-oss-20b',baseUrl:'https://api.groq.com/openai/v1'},
+  openrouter:{model:'~openai/gpt-latest',baseUrl:'https://openrouter.ai/api/v1'},
+  mistral:{model:'mistral-large-latest',baseUrl:'https://api.mistral.ai/v1'}
+};
+function getModelFor(provider,tier){ try{ const k='aicase_model_'+provider+(tier==='light'?'_light':''); return sessionStorage.getItem(k)||((PROVIDER_DEFAULTS[provider]||{}).model||''); }catch(e){ return (PROVIDER_DEFAULTS[provider]||{}).model||''; } }
+function setModelFor(provider,model,tier){ try{ sessionStorage.setItem('aicase_model_'+provider+(tier==='light'?'_light':''), String(model||'').trim()); }catch(e){} }
+function getBaseUrlFor(provider){ try{ const stored=sessionStorage.getItem('aicase_baseurl_'+provider); return (stored&&stored.trim())||((PROVIDER_DEFAULTS[provider]||{}).baseUrl||''); }catch(e){ return (PROVIDER_DEFAULTS[provider]||{}).baseUrl||''; } }
+function setBaseUrlFor(provider,url){ try{ sessionStorage.setItem('aicase_baseurl_'+provider, String(url||'').trim().replace(/\/+$/,'')); }catch(e){} }
+function getProviderModelInput(provider,tier){ const id='api-model-'+(tier==='light'?'light-':'')+'input-'+provider; return document.getElementById(id); }
+
 
 function switchProviderTab(p){
   currentProviderTab=p;
   document.querySelectorAll('.provider-tab-btn').forEach(b=>b.classList.toggle('active', b.dataset.provider===p));
-  document.getElementById('provider-pane-claude').style.display = p==='claude'?'block':'none';
-  document.getElementById('provider-pane-gemini').style.display = p==='gemini'?'block':'none';
-  document.getElementById('provider-pane-agnes').style.display  = p==='agnes' ?'block':'none';
+  ['claude','gemini','agnes','nvidia','groq','openrouter','mistral'].forEach(x=>{ const el=document.getElementById('provider-pane-'+x); if(el) el.style.display=p===x?'block':'none'; });
 }
 
 function refreshApiUi(){
@@ -14361,9 +14445,9 @@ function refreshApiUi(){
     pill.classList.add('on'); txt.textContent=PROVIDER_LABEL[provider]+' 已啟用';
     if(banner){
       banner.style.display='flex';
-      banner.innerHTML=`<span>已啟用 <b>${PROVIDER_LABEL[provider]}</b> — 這次會自動上網查最新資料，競品分析、SWOT、五層分析、文案跟圖片提示都會根據你輸入的內容重新生成，不是套用固定範本。</span>`;
+      banner.innerHTML=`<span>已啟用 <b>${PROVIDER_LABEL[provider]}</b> — 競品分析、SWOT、五層分析、文案跟圖片提示都會根據你輸入的內容重新生成。${providerSupportsSearch(provider)?'此供應商支援原廠搜尋工具。':'此供應商目前以一般模型推理為主，不會假設具有原廠搜尋 grounding。'}</span>`;
     }
-    if(modalMode) modalMode.innerHTML=`<span>目前狀態：${PROVIDER_LABEL[provider]} 已啟用（含即時搜尋）</span>`;
+    if(modalMode) modalMode.innerHTML=`<span>目前狀態：${PROVIDER_LABEL[provider]} 已啟用${providerSupportsSearch(provider)?'（可用原廠搜尋工具）':''}</span>`;
     // 快速模式開關：只有在 AI 模式下才有意義（規則模擬模式本來就不查網路）
     if(quickRow) quickRow.style.display='block';
     if(quickToggle) quickToggle.checked=isQuickMode();
@@ -14380,10 +14464,9 @@ function refreshApiUi(){
 function openApiModal(){
   const p = getProvider() || 'claude';
   switchProviderTab(p);
-  document.getElementById('api-key-input-claude').value = getKeyFor('claude');
-  document.getElementById('api-key-input-gemini').value = getKeyFor('gemini');
-  document.getElementById('api-key-input-agnes').value  = getKeyFor('agnes');
-  try{ document.getElementById('api-baseurl-agnes').value = sessionStorage.getItem('aicase_baseurl_agnes')||''; }catch(e){}
+  ['claude','gemini','agnes','nvidia','groq','openrouter','mistral'].forEach(x=>{ const k=document.getElementById('api-key-input-'+x); if(k) k.value=getKeyFor(x); const m=getProviderModelInput(x); if(m) m.value=getModelFor(x); });
+  const claudeLight=getProviderModelInput('claude','light'); if(claudeLight) claudeLight.value=getModelFor('claude','light');
+  try{ const b=document.getElementById('api-baseurl-agnes'); if(b) b.value=getBaseUrlFor('agnes'); }catch(e){}
   refreshApiUi();
   document.getElementById('api-modal').classList.add('open');
 }
@@ -14400,28 +14483,22 @@ function saveApiKey(){
   if(!v){ toast('請先貼上 API Key，或選擇「改用規則模擬」','warning'); return; }
   if(p==='claude' && !v.startsWith('sk-ant-')){ toast('這不像是有效的 Anthropic API Key 格式（應以 sk-ant- 開頭），請確認後再試','warning'); return; }
   if(p==='gemini' && !isValidGeminiKeyFormat(v)){ toast('這不像是有效的 Google AI Studio API Key 格式（應以 AIza 或 AQ. 開頭），請確認後再試','warning'); return; }
-  // Agnes AI: no format restriction, accept any non-empty key
   setKeyFor(p, v);
+  const modelEl=getProviderModelInput(p);
+  if(modelEl && modelEl.value.trim()) setModelFor(p, modelEl.value.trim());
+  if(p==='claude'){ const lm=getProviderModelInput('claude','light'); if(lm && lm.value.trim()) setModelFor('claude',lm.value.trim(),'light'); }
+  if(p==='agnes'){ const baseUrl=document.getElementById('api-baseurl-agnes').value.trim(); setBaseUrlFor('agnes',baseUrl||PROVIDER_DEFAULTS.agnes.baseUrl); }
   setProvider(p);
   try{ sessionStorage.setItem('aicase_provider_ever_set','1'); }catch(e){}
-  if(p==='agnes'){
-    const baseUrl=document.getElementById('api-baseurl-agnes').value.trim();
-    try{ sessionStorage.setItem('aicase_baseurl_agnes', baseUrl); }catch(e){}
-  }
   refreshApiUi();
   closeApiModal();
-  toast('已啟用 '+PROVIDER_LABEL[p]+' 模式（含即時搜尋），下次分析將真實查詢網路資料','success',4200);
+  toast('已啟用 '+PROVIDER_LABEL[p]+' 模式，下次分析將依供應商能力執行'+(providerSupportsSearch(p)?'原廠搜尋工具':'一般模型推理'),'success',4200);
 }
 function clearApiKey(){
-  removeKeyFor('claude'); removeKeyFor('gemini'); removeKeyFor('agnes');
-  try{
-    sessionStorage.removeItem('aicase_provider');
-    sessionStorage.removeItem('aicase_baseurl_agnes');
-    sessionStorage.setItem('aicase_provider_ever_set','1'); // 使用者主動選擇「規則模擬」，尊重此選擇，不再自動覆寫
-  }catch(e){}
-  document.getElementById('api-key-input-claude').value='';
-  document.getElementById('api-key-input-gemini').value='';
-  document.getElementById('api-key-input-agnes').value='';
+  ['claude','gemini','agnes','nvidia','groq','openrouter','mistral'].forEach(removeKeyFor);
+  try{ sessionStorage.removeItem('aicase_provider'); ['claude','gemini','agnes','nvidia','groq','openrouter','mistral'].forEach(x=>{sessionStorage.removeItem('aicase_model_'+x);sessionStorage.removeItem('aicase_model_'+x+'_light');sessionStorage.removeItem('aicase_baseurl_'+x);}); sessionStorage.setItem('aicase_provider_ever_set','1'); }catch(e){}
+  ['claude','gemini','agnes','nvidia','groq','openrouter','mistral'].forEach(x=>{ const k=document.getElementById('api-key-input-'+x); if(k) k.value=''; const m=getProviderModelInput(x); if(m) m.value=getModelFor(x); });
+  const lm=getProviderModelInput('claude','light'); if(lm) lm.value=getModelFor('claude','light');
   try{ document.getElementById('api-baseurl-agnes').value=''; }catch(e){}
   refreshApiUi();
   closeApiModal();
@@ -14438,10 +14515,10 @@ async function testProviderConnection(provider){
   const key=inputEl.value.trim();
   if(!key){ resultEl.textContent='請先貼上 Key 再測試'; resultEl.style.color='var(--warning)'; return; }
   if(provider==='gemini' && !isValidGeminiKeyFormat(key)){ resultEl.textContent='金鑰格式看起來不正確'; resultEl.style.color='var(--warning)'; return; }
-  if(provider==='agnes'){
-    const baseUrl=document.getElementById('api-baseurl-agnes').value.trim();
-    try{ sessionStorage.setItem('aicase_baseurl_agnes', baseUrl); }catch(e){}
-  }
+  const modelEl=getProviderModelInput(provider);
+  if(modelEl && modelEl.value.trim()) setModelFor(provider,modelEl.value.trim());
+  if(provider==='claude'){ const lm=getProviderModelInput('claude','light'); if(lm && lm.value.trim()) setModelFor('claude',lm.value.trim(),'light'); }
+  if(provider==='agnes'){ const baseUrl=document.getElementById('api-baseurl-agnes').value.trim(); setBaseUrlFor('agnes',baseUrl||PROVIDER_DEFAULTS.agnes.baseUrl); }
   // 暫存到 sessionStorage 供 getKeyFor 讀取，即使使用者最後沒按「儲存並啟用」也不影響現況
   // （沒切換 provider，isAiMode() 仍看兩者同時成立，不會被誤判為已啟用）。
   setKeyFor(provider, key);
@@ -14450,8 +14527,13 @@ async function testProviderConnection(provider){
   const controller=new AbortController();
   const timeoutId=setTimeout(()=>controller.abort(), 15000);
   try{
-    const fn = provider==='gemini' ? callGemini : callAgnes;
-    await fn('你是連線測試助手，請只回覆「測試成功」四個字，不要有其他內容。', '請回覆測試成功', 30, false, controller.signal);
+    let fn;
+    if(provider==='gemini') fn=callGemini;
+    else if(provider==='agnes') fn=callAgnes;
+    else if(provider==='claude') fn=callClaude;
+    else fn=(sys,user,max,search,signal)=>callOpenAICompatibleProvider(provider,sys,user,max,signal);
+    if(provider==='claude') await fn('你是連線測試助手，請只回覆「測試成功」四個字，不要有其他內容。','請回覆測試成功',30,false,'light',1,controller.signal);
+    else await fn('你是連線測試助手，請只回覆「測試成功」四個字，不要有其他內容。','請回覆測試成功',30,false,controller.signal);
     resultEl.textContent='✓ 連線成功，金鑰可用';
     resultEl.style.color='var(--success, #16A34A)';
   }catch(err){
@@ -14558,6 +14640,7 @@ async function callAI(systemPrompt, userPrompt, maxTokens, enableSearch, modelTi
   const provider=getProvider();
   if(provider==='gemini') return await callGemini(systemPrompt, userPrompt, maxTokens, enableSearch, abortSignal);
   if(provider==='agnes')  return await callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abortSignal);
+  if(['nvidia','groq','openrouter','mistral'].includes(provider)) return await callOpenAICompatibleProvider(provider, systemPrompt, userPrompt, maxTokens, abortSignal);
   return await callClaude(systemPrompt, userPrompt, maxTokens, enableSearch, modelTier, maxUses, abortSignal);
 }
 
@@ -14567,14 +14650,14 @@ async function callClaude(systemPrompt, userPrompt, maxTokens, enableSearch, mod
   // 成本優化：模型分層。主分析（五層分析＋競品＋SWOT，需要深度推理與搜尋整合）維持用 Sonnet 5；
   // 文案／圖片 prompt／關鍵字建議這類「格式固定、任務單純」的次要呼叫，改用成本更低、速度更快的
   // Haiku 4.5，品質落差對這類短任務影響很小，但能顯著降低整體 token 成本。
-  const model = modelTier==='light' ? 'claude-haiku-4-5-20251001' : 'claude-sonnet-5';
+  const model = getModelFor('claude', modelTier==='light'?'light':undefined);
   // 穩定性修復：max_uses 上限現在可由呼叫端指定（預設5，主分析用）。
   // 曾實際發生「重新生成文案」失敗：文案生成的 max_tokens 只給 1400，
   // 若同時啟用 web_search，模型執行搜尋所產生的 tool_use 區塊也會計入同一個 max_tokens 額度，
   // 搜尋次數一多，留給最終 JSON 文字的額度就可能不夠，導致回應在字串中途被硬生生截斷、
   // JSON 解析失敗 → 前端誤判為「重新生成失敗」而顯示規則模擬版本。因此格式單純、
   // 篇幅短的次要呼叫（文案／關鍵字建議）應傳入更小的 maxUses（例如2），從源頭降低這個風險。
-  const tools = enableSearch ? [{type:'web_search_20250305', name:'web_search', max_uses:(maxUses||5)}] : undefined;
+  const tools = enableSearch ? [{type:'web_search_20260318', name:'web_search', allowed_callers:['direct'], max_uses:(maxUses||5)}] : undefined;
   // v20.3：登記本次呼叫的診斷資訊，供「執行診斷資訊」面板即時顯示。
   try{
     const sysFlat = typeof systemPrompt==='object' ? (systemPrompt.cached||'')+(systemPrompt.dynamic||'') : String(systemPrompt||'');
@@ -14661,11 +14744,12 @@ async function callGemini(systemPrompt, userPrompt, maxTokens, enableSearch, abo
   const tools = enableSearch ? [{google_search:{}}] : undefined;
   try{
     window.__aiDiag.provider='gemini';
-    window.__aiDiag.model='gemini-2.5-flash';
+    const model = getModelFor('gemini');
+    window.__aiDiag.model=model;
     window.__aiDiag.maxTokens=maxTokens||2000;
     window.__aiDiag.inputTokensEst=estimateTokens(flattenSystemPrompt(systemPrompt))+estimateTokens(userPrompt);
   }catch(e){}
-  const doFetch=(signal)=>fetch('https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent', {
+  const doFetch=(signal)=>fetch('https://generativelanguage.googleapis.com/v1beta/models/'+encodeURIComponent(model)+':generateContent', {
     method:'POST',
     headers:{ 'Content-Type':'application/json', 'x-goog-api-key': key },
     body: JSON.stringify({
@@ -14732,11 +14816,8 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   if(!key) throw new Error('no_key:尚未設定 Agnes AI API Key');
 
   // 官方正確端點：https://apihub.agnes-ai.com/v1
-  let baseUrl='https://apihub.agnes-ai.com/v1';
-  try{
-    const stored=sessionStorage.getItem('aicase_baseurl_agnes');
-    if(stored && stored.trim()) baseUrl=stored.trim().replace(/\/+$/,'');
-  }catch(e){}
+  const baseUrl=getBaseUrlFor('agnes')||PROVIDER_DEFAULTS.agnes.baseUrl;
+  const model=getModelFor('agnes');
 
   const messages=[
     {role:'system', content:flattenSystemPrompt(systemPrompt)},
@@ -14744,7 +14825,7 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   ];
   try{
     window.__aiDiag.provider='agnes';
-    window.__aiDiag.model='agnes-2.0-flash';
+    window.__aiDiag.model=model;
     window.__aiDiag.maxTokens=maxTokens||2000;
     window.__aiDiag.inputTokensEst=estimateTokens(messages[0].content)+estimateTokens(messages[1].content);
   }catch(e){}
@@ -14756,7 +14837,7 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
       'Authorization':'Bearer '+key
     },
     body:JSON.stringify({
-      model:'agnes-2.0-flash',
+      model,
       max_tokens: maxTokens||2000,
       messages
     }),
@@ -14798,6 +14879,62 @@ async function callAgnes(systemPrompt, userPrompt, maxTokens, enableSearch, abor
   // 注意：Agnes AI（OpenAI 相容端點）目前無對應的搜尋 grounding metadata 可擷取，
   // citations 固定回傳空陣列，介面統一由呼叫端（buildReferencesHtml）判斷並誠實標示「無法驗證」。
   return {text, citations: [], truncated: (choice && choice.finish_reason)==='length'};
+}
+
+/* ---------------- OpenAI-compatible providers ---------------- */
+async function callOpenAICompatibleProvider(provider, systemPrompt, userPrompt, maxTokens, abortSignal){
+  const key=getKeyFor(provider);
+  if(!key) throw new Error('no_key:尚未設定 '+(PROVIDER_LABEL[provider]||provider)+' API Key');
+  const cfg=PROVIDER_DEFAULTS[provider]||{};
+  const baseUrl=getBaseUrlFor(provider)||cfg.baseUrl;
+  const model=getModelFor(provider);
+  if(!model) throw new Error('invalid_model:尚未設定 '+(PROVIDER_LABEL[provider]||provider)+' 模型 ID');
+  const messages=[
+    {role:'system',content:flattenSystemPrompt(systemPrompt)},
+    {role:'user',content:userPrompt}
+  ];
+  try{
+    window.__aiDiag.provider=provider;
+    window.__aiDiag.model=model;
+    window.__aiDiag.maxTokens=maxTokens||2000;
+    window.__aiDiag.inputTokensEst=estimateTokens(messages[0].content)+estimateTokens(messages[1].content);
+  }catch(e){}
+  const headers={'Content-Type':'application/json','Authorization':'Bearer '+key};
+  if(provider==='openrouter'){
+    headers['HTTP-Referer']=location.origin;
+    headers['X-OpenRouter-Title']='公鑑 FairView';
+  }
+  const doFetch=(signal)=>fetch(baseUrl+'/chat/completions',{
+    method:'POST',headers,
+    body:JSON.stringify({model,max_tokens:maxTokens||2000,messages}),signal
+  });
+  let resp;
+  try{
+    resp=await fetchWithRetry(doFetch,2,(attempt,max,status,wait)=>{
+      console.info('['+provider+'] 伺服器忙線中（'+status+'），第 '+attempt+'/'+max+' 次重試，等待 '+(wait/1000)+' 秒…');
+      if(window._onAiRetry) window._onAiRetry(PROVIDER_LABEL[provider]||provider,attempt,max,status);
+    },abortSignal,computeAttemptTimeoutMs(maxTokens));
+  }catch(networkErr){
+    if(abortSignal && abortSignal.aborted) throw networkErr;
+    if(networkErr.name==='TimeoutError' || /^timeout:/.test(networkErr.message||'')) throw networkErr;
+    throw new Error('cors_or_network:'+PROVIDER_LABEL[provider]+' API 連線失敗（可能是 CORS、DNS 或端點設定問題）。Base URL：'+baseUrl);
+  }
+  if(!resp.ok){
+    const errText=await resp.text().catch(()=>'');
+    if(resp.status===401||resp.status===403) throw new Error('auth_error:'+PROVIDER_LABEL[provider]+' API Key 無效或權限不足');
+    if(resp.status===404) throw new Error('model_or_endpoint:'+PROVIDER_LABEL[provider]+' 模型或端點不存在，請確認模型 ID：'+model);
+    if(resp.status===429) throw new Error('rate_limit:'+PROVIDER_LABEL[provider]+' 額度／速率限制，已自動重試但仍失敗');
+    if(resp.status===503) throw new Error('overloaded:'+PROVIDER_LABEL[provider]+' 服務目前負載過高（503），已自動重試但仍失敗');
+    throw new Error('api_error:'+resp.status+':'+errText.slice(0,250));
+  }
+  const data=await resp.json();
+  try{
+    if(data.usage) window.__aiDiag.actualUsage={input:data.usage.prompt_tokens??data.usage.input_tokens,output:data.usage.completion_tokens??data.usage.output_tokens,total:data.usage.total_tokens};
+  }catch(e){}
+  const choice=data.choices&&data.choices[0];
+  const text=(choice&&choice.message&&choice.message.content)||'';
+  if(!text) throw new Error('empty_response:'+PROVIDER_LABEL[provider]+' 回應中沒有文字內容');
+  return {text,citations:[],truncated:(choice&&['length','max_tokens'].includes(choice.finish_reason))};
 }
 
 function fixStrayFullWidthColon(t){
@@ -17517,7 +17654,7 @@ async function fetchAiCopies(d, regen){
   // Agnes AI（OpenAI 相容端點）目前無搜尋 grounding 能力（見 callAgnes 完全未使用
   // enableSearch 參數，未附加任何 tools），故改為誠實指示：不要求即時搜尋，改用
   // 穩定、不需查證時效性的社群慣用語風格撰寫，避免捏造看似真實的特定近期時事哏。
-  const providerHasRealSearch = getProvider()!=='agnes';
+  const providerHasRealSearch = providerSupportsSearch(getProvider());
   const ctxCompetitors = fullAnalysis ? summarizeCompetitorsForPrompt(fullAnalysis.competitors) : '';
   const ctxLine = ctxCompetitors ? `\n已知市場脈絡（僅供語氣與切角參考，不可逐字複製貼入文案）：主要競品—${ctxCompetitors}` : '';
   const usr=`產品：${d.product}\n核心賣點：${d.usp||'未提供'}\n客單價：NT$ ${d.price}\n目標客群：${d.audience}\n主要投放管道：${d.channel}\n行銷目標：${GOAL_LABEL[d.goal]}${ctxLine}`;
@@ -19819,6 +19956,31 @@ html body #screen-4 .done-box .delivery-ready-title-force:active{
   box-shadow:0 0 0 4px rgba(139,30,45,0.16), 0 8px 18px rgba(107,18,31,0.14) !important;
 }
 </style>
+
+<div id="fairview-line-qr-overlay" class="fairview-qr-overlay" hidden role="dialog" aria-modal="true" aria-labelledby="fairview-line-qr-title" onclick="if(event.target===this) closeLineFriendQr()">
+  <div class="fairview-qr-card">
+    <h3 id="fairview-line-qr-title">加入 Line 好友</h3>
+    <p>掃描 QR-CODE 加入好友：<strong>felix_line</strong></p>
+    <img class="fairview-qr-image" src="line-felix-line-qr.png" alt="Line felix_line 加入好友 QR-CODE">
+    <button class="fairview-qr-close" type="button" onclick="closeLineFriendQr()">關閉</button>
+  </div>
+</div>
+<script id="fairview-footer-functions">
+function openLineFriendQr(){
+  var overlay=document.getElementById('fairview-line-qr-overlay');
+  if(!overlay) return;
+  overlay.hidden=false;
+  document.body.style.overflow='hidden';
+}
+function closeLineFriendQr(){
+  var overlay=document.getElementById('fairview-line-qr-overlay');
+  if(!overlay) return;
+  overlay.hidden=true;
+  document.body.style.overflow='';
+}
+document.addEventListener('keydown',function(e){if(e.key==='Escape') closeLineFriendQr();});
+</script>
+
 </body></html>`;
 
   if(format === 'pdf'){
